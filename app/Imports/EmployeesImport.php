@@ -8,112 +8,160 @@ use App\Models\Position;
 use App\Models\Team;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class EmployeesImport implements ToCollection, WithHeadingRow
+class EmployeesImport implements ToCollection
 {
+    public int $importedCount = 0;
+    public int $updatedCount = 0;
+
     public function collection(Collection $rows)
     {
-        foreach ($rows as $row) {
-            $rowArray = $row->toArray();
+        $seenEmpCodes = [];
 
-            // Extract values supporting both Thai & English header keys
-            $empCode = $this->getValue($rowArray, ['emp_code', 'รหัสพนักงาน', 'รหัสที่เครื่อง', 'code']);
-            $firstName = $this->getValue($rowArray, ['first_name', 'ชื่อ', 'ชื่อจริง', 'name']);
-            $lastName = $this->getValue($rowArray, ['last_name', 'นามสกุล', 'surname']);
-            $prefix = $this->getValue($rowArray, ['prefix', 'คำนำหน้า', 'คำนำหน้านาม']);
-            $deptNameOrCode = $this->getValue($rowArray, ['department_code', 'department', 'แผนก', 'ฝ่าย', 'ชื่อแผนก']);
-            $positionNameOrCode = $this->getValue($rowArray, ['position_code', 'position', 'ตำแหน่ง']);
-            $teamNameOrCode = $this->getValue($rowArray, ['team_code', 'team', 'ทีม']);
-            $email = $this->getValue($rowArray, ['email', 'อีเมล']);
-            $phone = $this->getValue($rowArray, ['phone', 'เบอร์โทร', 'เบอร์โทรศัพท์']);
-            $salary = $this->getValue($rowArray, ['salary', 'เงินเดือน', 'ฐานเงินเดือน', 'ค่าจ้าง']);
-            $wageType = $this->getValue($rowArray, ['wage_type', 'ประเภทค่าจ้าง']);
+        foreach ($rows as $index => $row) {
+            $cols = array_values($row->toArray());
+            if (count($cols) < 2) continue;
 
-            if (empty($empCode) || empty($firstName)) {
-                continue; // Skip empty rows
+            $col0 = trim((string)($cols[0] ?? ''));
+            $col1 = trim((string)($cols[1] ?? ''));
+            $col2 = trim((string)($cols[2] ?? ''));
+            $col3 = trim((string)($cols[3] ?? ''));
+
+            // Header row detection
+            if (
+                str_contains($col0, 'รหัส') || str_contains(strtolower($col0), 'code') || str_contains($col0, 'Device') ||
+                str_contains($col1, 'รหัส') || str_contains(strtolower($col1), 'code') || str_contains($col2, 'ชื่อ') || str_contains(strtolower($col2), 'name')
+            ) {
+                continue;
             }
 
-            // Match Department by Code or Name
+            // Detect Employee Code
+            $empCode = !empty($col0) ? $col0 : (!empty($col1) ? $col1 : '');
+
+            // Detect Full Name or First Name / Last Name
+            $prefix = 'นาย';
+            $firstName = '';
+            $lastName = '-';
+            $deptStr = '';
+            $posStr = '';
+            $salary = 15000.00;
+
+            if (!empty($col2) && (empty($col3) || preg_match('/^\d{2}\/\d{2}/', $col3) || str_contains($col3, 'ฝ่าย') || str_contains($col3, 'แผนก'))) {
+                // Layout pattern: [0: EmpCode, 1: blank, 2: FullName, 3: DeptName]
+                $fullName = $col2;
+                $deptStr = $col3;
+
+                // Extract Prefix
+                if (str_starts_with($fullName, 'นาย')) {
+                    $prefix = 'นาย';
+                    $fullName = trim(mb_substr($fullName, 3));
+                } elseif (str_starts_with($fullName, 'นางสาว')) {
+                    $prefix = 'นางสาว';
+                    $fullName = trim(mb_substr($fullName, 6));
+                } elseif (str_starts_with($fullName, 'นาง')) {
+                    $prefix = 'นาง';
+                    $fullName = trim(mb_substr($fullName, 3));
+                }
+
+                $nameParts = preg_split('/\s+/', trim($fullName));
+                if (count($nameParts) >= 2) {
+                    $firstName = $nameParts[0];
+                    $lastName = implode(' ', array_slice($nameParts, 1));
+                } else {
+                    $firstName = $fullName;
+                }
+            } else {
+                // Standard Layout pattern: [0: EmpCode, 1: Prefix, 2: FirstName, 3: LastName, 4: Dept, 5: Pos]
+                if (in_array($col1, ['นาย', 'นาง', 'นางสาว', 'Mr.', 'Mrs.', 'Ms.'])) {
+                    $prefix = $col1;
+                    $firstName = $col2;
+                    $lastName = !empty($col3) ? $col3 : '-';
+                    $deptStr = !empty($cols[4]) ? trim((string)$cols[4]) : '';
+                    $posStr = !empty($cols[5]) ? trim((string)$cols[5]) : '';
+                } else {
+                    $firstName = !empty($col1) ? $col1 : $col0;
+                    $lastName = !empty($col2) ? $col2 : '-';
+                    $deptStr = !empty($col3) ? $col3 : '';
+                    $posStr = !empty($cols[4]) ? trim((string)$cols[4]) : '';
+                }
+            }
+
+            // Find salary if any col has numeric salary value
+            foreach ($cols as $cVal) {
+                if (is_numeric($cVal) && (float)$cVal >= 1000 && (float)$cVal <= 500000 && (string)$cVal !== $empCode && (string)$cVal !== $col0) {
+                    $salary = (float)$cVal;
+                    break;
+                }
+            }
+
+            if (empty($empCode) || empty($firstName) || $empCode === 'รหัสพนักงาน' || $firstName === 'ชื่อ-นามสกุล') {
+                continue;
+            }
+
+            // Prevent duplicate processing in same file loop
+            if (isset($seenEmpCodes[$empCode])) {
+                continue;
+            }
+            $seenEmpCodes[$empCode] = true;
+
+            // Department Match or Auto Create
             $department = null;
-            if (!empty($deptNameOrCode)) {
-                $department = Department::where('code', $deptNameOrCode)
-                    ->orWhere('name_th', 'like', "%{$deptNameOrCode}%")
+            if (!empty($deptStr)) {
+                $department = Department::where('code', $deptStr)
+                    ->orWhere('name_th', 'like', "%{$deptStr}%")
                     ->first();
             }
 
             if (!$department) {
-                // Fallback or create department
+                $deptName = !empty($deptStr) ? $deptStr : 'แผนกทั่วไป';
                 $department = Department::firstOrCreate(
-                    ['code' => !empty($deptNameOrCode) ? strtoupper(substr($deptNameOrCode, 0, 10)) : 'GEN'],
-                    ['name_th' => $deptNameOrCode ?: 'แผนกทั่วไป', 'is_active' => true]
+                    ['name_th' => $deptName],
+                    ['code' => strtoupper(substr(md5($deptName), 0, 8)), 'is_active' => true]
                 );
             }
 
-            // Match Position by Code or Title
+            // Position Match or Auto Create
             $position = null;
-            if (!empty($positionNameOrCode)) {
-                $position = Position::where('code', $positionNameOrCode)
-                    ->orWhere('title_th', 'like', "%{$positionNameOrCode}%")
+            if (!empty($posStr)) {
+                $position = Position::where('code', $posStr)
+                    ->orWhere('title_th', 'like', "%{$posStr}%")
                     ->first();
 
                 if (!$position) {
                     $position = Position::firstOrCreate(
-                        ['code' => strtoupper(substr($positionNameOrCode, 0, 10))],
-                        ['title_th' => $positionNameOrCode, 'is_active' => true]
+                        ['title_th' => $posStr],
+                        ['code' => strtoupper(substr(md5($posStr), 0, 8)), 'is_active' => true]
                     );
                 }
             }
 
-            // Match Team by Code or Name
-            $team = null;
-            if (!empty($teamNameOrCode)) {
-                $team = Team::where('code', $teamNameOrCode)
-                    ->orWhere('name_th', 'like', "%{$teamNameOrCode}%")
-                    ->first();
-            }
-
-            // Update or Create Employee by emp_code
-            Employee::updateOrCreate(
-                ['emp_code' => trim($empCode)],
-                [
-                    'prefix' => !empty($prefix) ? trim($prefix) : 'นาย',
-                    'first_name' => trim($firstName),
-                    'last_name' => !empty($lastName) ? trim($lastName) : '-',
+            // Update or Create Employee
+            $existing = Employee::where('emp_code', trim($empCode))->first();
+            if ($existing) {
+                $existing->update([
+                    'prefix' => $prefix,
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'department_id' => $department->id,
+                    'position_id' => $position?->id ?? $existing->position_id,
+                    'salary' => $salary > 1000 ? $salary : $existing->salary,
+                    'status' => 'Active',
+                ]);
+                $this->updatedCount++;
+            } else {
+                Employee::create([
+                    'emp_code' => trim($empCode),
+                    'prefix' => $prefix,
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
                     'department_id' => $department->id,
                     'position_id' => $position?->id,
-                    'team_id' => $team?->id,
-                    'email' => !empty($email) ? trim($email) : null,
-                    'phone' => !empty($phone) ? trim($phone) : null,
-                    'salary' => !empty($salary) ? (float)$salary : 15000.00,
-                    'wage_type' => (!empty($wageType) && strtolower($wageType) === 'daily') ? 'Daily' : 'Monthly',
+                    'salary' => $salary,
+                    'wage_type' => 'Monthly',
                     'status' => 'Active',
-                ]
-            );
-        }
-    }
-
-    /**
-     * Helper to find value from multiple possible column keys.
-     */
-    private function getValue(array $row, array $keys): ?string
-    {
-        foreach ($keys as $key) {
-            // Check direct key
-            if (isset($row[$key]) && !empty($row[$key])) {
-                return (string)$row[$key];
-            }
-
-            // Check slugified/lowercased keys
-            $normalizedKey = strtolower(str_replace([' ', '_', '-'], '', $key));
-            foreach ($row as $rKey => $rVal) {
-                $normRKey = strtolower(str_replace([' ', '_', '-'], '', (string)$rKey));
-                if ($normRKey === $normalizedKey && !empty($rVal)) {
-                    return (string)$rVal;
-                }
+                ]);
+                $this->importedCount++;
             }
         }
-
-        return null;
     }
 }

@@ -199,11 +199,18 @@ class EmployeeController extends Controller
         ]);
 
         try {
-            Excel::import(new EmployeesImport, $request->file('file'));
+            $import = new EmployeesImport();
+            Excel::import($import, $request->file('file'));
 
             AuditLogService::log(action: 'Import Employees Excel', module: 'Master Data');
 
-            return redirect()->route('admin.employees.index')->with('success', 'นำเข้าและอัปเดตข้อมูลพนักงานจากไฟล์เรียบร้อยแล้ว');
+            $total = $import->importedCount + $import->updatedCount;
+            if ($total > 0) {
+                $msg = "นำเข้าและอัปเดตข้อมูลพนักงานสำเร็จ {$total} รายการ (เพิ่มใหม่ {$import->importedCount} รายการ, อัปเดตเดิม {$import->updatedCount} รายการ)";
+                return redirect()->route('admin.employees.index')->with('success', $msg);
+            }
+
+            return redirect()->back()->with('warning', 'อ่านไฟล์สำเร็จ แต่ไม่พบรายการพนักงานในไฟล์ กรุณาตรวจสอบว่ามีข้อมูลในไฟล์');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'เกิดข้อผิดพลาดในการนำเข้าไฟล์: ' . $e->getMessage());
         }
