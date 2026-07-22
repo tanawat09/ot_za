@@ -265,7 +265,7 @@ class EmployeesImport implements ToCollection
             }
             $seenEmpCodes[$empCode] = true;
 
-            $existing = Employee::where('emp_code', trim($empCode))->first();
+            $existing = Employee::withTrashed()->where('emp_code', trim($empCode))->first();
             $status = $existing ? 'UPDATE' : 'NEW';
             $statusLabel = $existing ? 'อัปเดตข้อมูลเดิม' : 'เพิ่มใหม่';
 
@@ -329,24 +329,19 @@ class EmployeesImport implements ToCollection
                 ]);
             }
 
-            // Position Match or Create (with SoftDeletes support)
+            // Position Match or Create (Standard model without SoftDeletes)
             $position = null;
             if (!empty($posName) && $posName !== '-') {
-                $position = Position::withTrashed()
-                    ->where('title_th', $posName)
+                $position = Position::where('title_th', $posName)
                     ->orWhere('code', $posName)
                     ->orWhere('title_th', 'like', "%{$posName}%")
                     ->first();
 
-                if ($position) {
-                    if ($position->trashed()) {
-                        $position->restore();
-                    }
-                } else {
+                if (!$position) {
                     $baseCode = strtoupper(substr(md5($posName), 0, 8));
                     $code = $baseCode;
                     $counter = 1;
-                    while (Position::withTrashed()->where('code', $code)->exists()) {
+                    while (Position::where('code', $code)->exists()) {
                         $code = $baseCode . '_' . $counter++;
                     }
 
