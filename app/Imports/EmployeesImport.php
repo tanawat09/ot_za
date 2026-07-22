@@ -65,32 +65,59 @@ class EmployeesImport implements ToCollection
         $seenEmpCodes = [];
 
         foreach ($rows as $index => $row) {
-            $cols = array_values($row->toArray());
-            if (count($cols) < 2) continue;
+            $cols = array_values(array_map(fn($v) => trim((string)$v), $row->toArray()));
 
-            $c0 = trim((string)($cols[0] ?? ''));
-            $c1 = trim((string)($cols[1] ?? ''));
-            $c2 = trim((string)($cols[2] ?? ''));
-            $c3 = trim((string)($cols[3] ?? ''));
-            $c4 = trim((string)($cols[4] ?? ''));
-            $c5 = trim((string)($cols[5] ?? ''));
-
-            // Header row detection
-            if (
-                str_contains($c0, 'รหัส') || str_contains(strtolower($c0), 'code') || str_contains($c0, 'Device') ||
-                str_contains($c1, 'รหัส') || str_contains(strtolower($c1), 'code') || str_contains($c2, 'ชื่อ') || str_contains(strtolower($c2), 'name')
-            ) {
-                continue;
+            // Remove trailing empty elements
+            while (count($cols) > 0 && end($cols) === '') {
+                array_pop($cols);
             }
 
-            // Detect Employee Code
-            $empCode = !empty($c0) ? $c0 : (!empty($c1) ? $c1 : '');
-            if (empty($empCode) || $empCode === 'รหัสพนักงาน') continue;
+            if (count($cols) < 2) continue;
 
-            // Format empCode if purely numeric (e.g. 1 -> 00001, 10 -> 00010)
+            // Header row detection (only check first 2 rows)
+            if ($index < 2) {
+                $rowStr = implode(' ', $cols);
+                if (
+                    str_contains($rowStr, 'รหัสพนักงาน') || str_contains(strtolower($rowStr), 'emp_code') ||
+                    str_contains($rowStr, 'ชื่อ-นามสกุล') || str_contains($rowStr, 'รหัสที่เครื่อง')
+                ) {
+                    continue;
+                }
+            }
+
+            // Find Emp Code column intelligently
+            $empCode = '';
+            $empCodeColIdx = -1;
+
+            foreach ($cols as $idx => $val) {
+                if (empty($val)) continue;
+                if (preg_match('/^[A-Za-z0-9_-]{1,20}$/', $val) && $val !== 'รหัสพนักงาน' && $val !== 'ลำดับ' && $val !== 'No') {
+                    // Check if $val is a sequence number like 1, 2, 3 and next col is actual emp code
+                    if (ctype_digit($val) && (int)$val < 500 && isset($cols[$idx + 1]) && preg_match('/^[A-Za-z0-9_-]{3,20}$/', $cols[$idx + 1]) && !preg_match('/[\x{0E00}-\x{0E7F}]/u', $cols[$idx + 1])) {
+                        continue;
+                    }
+                    $empCode = $val;
+                    $empCodeColIdx = $idx;
+                    break;
+                }
+            }
+
+            if (empty($empCode)) continue;
+
+            // Format empCode if purely numeric and < 5 digits (e.g. 1 -> 00001)
             if (ctype_digit($empCode) && strlen($empCode) < 5) {
                 $empCode = sprintf('%05d', (int)$empCode);
             }
+
+            // Gather remaining text columns after empCodeColIdx for Name, Surname, Dept
+            $textCols = [];
+            for ($i = $empCodeColIdx + 1; $i < count($cols); $i++) {
+                if ($cols[$i] !== '') {
+                    $textCols[] = $cols[$i];
+                }
+            }
+
+            if (empty($textCols)) continue;
 
             $prefix = 'นาย';
             $firstName = '';
@@ -99,35 +126,33 @@ class EmployeesImport implements ToCollection
             $posStr = '';
             $salary = 15000.00;
 
-            if (empty($c1) && !empty($c2)) {
-                // Pattern A (HIP Export Matrix): [0: EmpCode, 1: blank, 2: FullName, 3: DeptName]
-                [$prefix, $cleanName] = self::extractPrefixAndName($c2);
-                $nameParts = preg_split('/\s+/', trim($cleanName));
-                $firstName = $nameParts[0] ?? '';
-                if (count($nameParts) >= 2) {
-                    $lastName = implode(' ', array_slice($nameParts, 1));
-                }
-                $deptStr = $c3;
+            $firstText = $textCols[0];
+            [$extractedPrefix, $cleanFirstText] = self::extractPrefixAndName($firstText);
+            $prefix = $extractedPrefix;
+
+            $nameWords = preg_split('/\s+/', trim($cleanFirstText));
+
+            if (count($nameWords) >= 2) {
+                // First text column contains both First Name and Last Name
+                $firstName = $nameWords[0];
+                $lastName = implode(' ', array_slice($nameWords, 1));
+                $deptStr = $textCols[1] ?? '';
+                $posStr = $textCols[2] ?? '';
             } else {
-                // Pattern B (Standard Excel Multi-Col): [0: EmpCode, 1: Prefix+Name, 2: LastName, 3: Dept]
-                [$prefix1, $cleanName1] = self::extractPrefixAndName($c1);
+                // First text column is First Name (or Prefix+Name), second text column is Last Name or Dept
+                $firstName = $nameWords[0] ?? $cleanFirstText;
 
-                $firstName = $cleanName1;
-
-                if (!empty($c2)) {
+                if (isset($textCols[1])) {
+                    $c2 = $textCols[1];
                     $isDeptKeyword = str_contains($c2, 'ฝ่าย') || str_contains($c2, 'แผนก') || str_contains($c2, 'สำนัก') || str_contains($c2, 'ส่วน') || str_contains(strtolower($c2), 'dept');
                     if ($isDeptKeyword) {
                         $deptStr = $c2;
                     } else {
                         $lastName = $c2;
-                        $deptStr = !empty($c3) ? $c3 : (!empty($c4) ? $c4 : '');
-                        $posStr = !empty($c4) && $c4 !== $deptStr ? $c4 : (!empty($c5) ? $c5 : '');
+                        $deptStr = $textCols[2] ?? '';
+                        $posStr = $textCols[3] ?? '';
                     }
-                } else {
-                    $deptStr = !empty($c3) ? $c3 : '';
                 }
-
-                $prefix = $prefix1;
             }
 
             // Clean trailing '-' or space in lastName
@@ -140,7 +165,7 @@ class EmployeesImport implements ToCollection
 
             // Find salary if any col has numeric salary value
             foreach ($cols as $cVal) {
-                if (is_numeric($cVal) && (float)$cVal >= 1000 && (float)$cVal <= 500000 && (string)$cVal !== $empCode && (string)$cVal !== $c0) {
+                if (is_numeric($cVal) && (float)$cVal >= 1000 && (float)$cVal <= 500000 && (string)$cVal !== $empCode) {
                     $salary = (float)$cVal;
                     break;
                 }
