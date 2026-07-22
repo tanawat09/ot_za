@@ -79,15 +79,37 @@ class PositionController extends Controller
         return redirect()->route('admin.positions.index')->with('success', 'อัปเดตตำแหน่งสำเร็จ');
     }
 
-    public function destroy(Position $position)
+    public function destroy(Request $request, Position $position)
     {
+        if ($position->employees()->count() > 0 && !$request->boolean('force')) {
+            return redirect()->back()->with('error', 'ไม่สามารถลบตำแหน่งที่มีพนักงานสังกัดอยู่ได้ (หากต้องการลบ กรุณาย้ายพนักงานก่อนหรือกดเลือกบังคับลบตำแหน่ง)');
+        }
+
+        $posTitle = $position->title_th;
+
         if ($position->employees()->count() > 0) {
-            return redirect()->back()->with('error', 'ไม่สามารถลบตำแหน่งที่มีพนักงานสังกัดอยู่ได้');
+            $position->employees()->update(['position_id' => null]);
         }
 
         $position->delete();
         AuditLogService::log(action: 'Delete Position', module: 'Master Data', recordId: (string)$position->id);
 
-        return redirect()->route('admin.positions.index')->with('success', 'ลบตำแหน่งสำเร็จ');
+        return redirect()->route('admin.positions.index')->with('success', "ลบตำแหน่ง {$posTitle} สำเร็จ");
+    }
+
+    public function clearUnused()
+    {
+        $deletedCount = 0;
+        $positions = Position::withCount('employees')->get();
+        foreach ($positions as $pos) {
+            if ($pos->employees_count === 0) {
+                $pos->delete();
+                $deletedCount++;
+            }
+        }
+
+        AuditLogService::log(action: 'Clear Unused Positions', module: 'Master Data');
+
+        return redirect()->route('admin.positions.index')->with('success', "ลบตำแหน่งงานที่ไม่มีพนักงานสังกัดออกสำเร็จทั้งหมด {$deletedCount} รายการ");
     }
 }

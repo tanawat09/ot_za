@@ -102,6 +102,7 @@ Route::middleware(['auth', CheckActiveUser::class])->group(function () {
             Route::post('departments/clear-unused', [\App\Http\Controllers\Admin\DepartmentController::class, 'clearUnused'])->name('departments.clear-unused');
             Route::resource('departments', \App\Http\Controllers\Admin\DepartmentController::class);
             Route::resource('teams', \App\Http\Controllers\Admin\TeamController::class);
+            Route::post('positions/clear-unused', [\App\Http\Controllers\Admin\PositionController::class, 'clearUnused'])->name('positions.clear-unused');
             Route::resource('positions', \App\Http\Controllers\Admin\PositionController::class);
 
             Route::get('employees/export', [\App\Http\Controllers\Admin\EmployeeController::class, 'export'])->name('employees.export');
