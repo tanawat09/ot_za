@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ot_app
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    ports:
+      - "8082:8000"
+    depends_on:
+      - db
+    networks:
+      - ot_network
+
+  db:
+    image: mariadb:10.11
+    container_name: ot_mariadb
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3307:3306"
+    environment:
+      MARIADB_DATABASE: ot_db
+      MARIADB_USER: ot_user
+      MARIADB_PASSWORD: ot_password
+      MARIADB_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ot_db
+      MYSQL_USER: ot_user
+      MYSQL_PASSWORD: ot_password
+      MYSQL_ROOT_PASSWORD: root_password
+    volumes:
+      - ot_mariadb_data:/var/lib/mysql
+    networks:
+      - ot_network
+
+networks:
+  ot_network:
+    driver: bridge
+
+volumes:
+  ot_mariadb_data:
+    driver: local

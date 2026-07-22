@@ -1,0 +1,40 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Exports\PayrollExport;
+use App\Models\Department;
+use App\Services\AuditLogService;
+use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
+
+class PayrollExportController extends Controller
+{
+    public function index()
+    {
+        $departments = Department::all();
+        return view('payroll.index', compact('departments'));
+    }
+
+    public function export(Request $request)
+    {
+        $validated = $request->validate([
+            'year' => ['required', 'integer', 'min:2020', 'max:2099'],
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'format' => ['required', 'in:xlsx,csv'],
+        ]);
+
+        $filename = "payroll_ot_{$validated['year']}_{$validated['month']}." . $validated['format'];
+
+        AuditLogService::log(action: "Export Payroll Data ({$validated['format']})", module: 'Payroll Integration');
+
+        $export = new PayrollExport($validated['year'], $validated['month'], $validated['department_id'] ?? null);
+
+        if ($validated['format'] === 'csv') {
+            return Excel::download($export, $filename, \Maatwebsite\Excel\Excel::CSV);
+        }
+
+        return Excel::download($export, $filename);
+    }
+}
