@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     fontconfig \
-    fonts-liberation
+    fonts-liberation \
+    mdbtools
 
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 

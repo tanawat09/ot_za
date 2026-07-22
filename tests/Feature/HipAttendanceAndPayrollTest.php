@@ -34,14 +34,14 @@ class HipAttendanceAndPayrollTest extends TestCase
         ]);
         $this->admin->assignRole('Super Admin');
 
-        $this->department = Department::create(['code' => 'IT', 'name_th' => 'ไอที']);
+        $this->department = Department::create(['code' => 'LOG', 'name_th' => 'ฝ่ายขนส่ง']);
 
         $this->employee = Employee::create([
-            'emp_code' => 'EMP001',
+            'emp_code' => '563005',
             'user_id' => $this->admin->id,
             'prefix' => 'นาย',
-            'first_name' => 'สมชาย',
-            'last_name' => 'สายสแกน',
+            'first_name' => 'ปริญวัฒน์',
+            'last_name' => 'ปิยะอารยาภัสร์',
             'department_id' => $this->department->id,
             'salary' => 30000.00,
             'wage_type' => 'Monthly',
@@ -49,25 +49,27 @@ class HipAttendanceAndPayrollTest extends TestCase
         ]);
     }
 
-    public function test_import_hip_attendance_logs(): void
+    public function test_import_hip_attendance_matrix_csv_format(): void
     {
-        $records = [
-            [
-                'emp_code' => 'EMP001',
-                'log_date' => '2026-07-21',
-                'check_in' => '17:30',
-                'check_out' => '20:30',
-                'device_id' => 'HIP-DEV-01',
-            ]
+        $matrixRows = [
+            ['รหัสที่เครื่อง', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'แผนก', 'Date', '1', '2', '3', '4'],
+            ['563005', '', 'ปริญวัฒน์  ปิยะอารยาภัสร์', 'ฝ่ายขนส่ง', '01/07/2026', '07:54', '17:59', '', ''],
+            ['563005', '', 'ปริญวัฒน์  ปิยะอารยาภัสร์', 'ฝ่ายขนส่ง', '02/07/2026', '08:00', '20:01', '', ''],
+            ['563005', '', 'ปริญวัฒน์  ปิยะอารยาภัสร์', 'ฝ่ายขนส่ง', '05/07/2026', '', '', '', ''], // Should skip
         ];
 
-        $result = HipImportService::processImport($records, 'BATCH_TEST_01');
+        $result = HipImportService::processMatrixRows($matrixRows, 'BATCH_TEST_MATRIX');
 
-        $this->assertEquals(1, $result['imported_count']);
+        $this->assertEquals(2, $result['imported_count']);
         $this->assertDatabaseHas('hip_attendance_logs', [
-            'emp_code' => 'EMP001',
-            'check_in' => '17:30',
-            'check_out' => '20:30',
+            'emp_code' => '563005',
+            'check_in' => '07:54',
+            'check_out' => '17:59',
+        ]);
+        $this->assertDatabaseHas('hip_attendance_logs', [
+            'emp_code' => '563005',
+            'check_in' => '08:00',
+            'check_out' => '20:01',
         ]);
     }
 
@@ -81,7 +83,7 @@ class HipAttendanceAndPayrollTest extends TestCase
         ]);
 
         $otRequest = OvertimeRequest::create([
-            'document_no' => 'OT-202607-IT-00001',
+            'document_no' => 'OT-202607-LOG-00001',
             'department_id' => $this->department->id,
             'created_by_user_id' => $this->admin->id,
             'overtime_type_id' => $otType->id,
@@ -104,8 +106,6 @@ class HipAttendanceAndPayrollTest extends TestCase
             'actual_hours' => 3.00,
         ]);
 
-        // Monthly salary 30,000 -> Hourly rate = (30000 / 30) / 8 = 125 THB/hr
-        // OT 1.5x Pay = 3.0 hrs * 125 * 1.5 = 562.50 THB
         $payroll = PayrollService::calculateMonthlyPayroll(2026, 7, $this->department->id);
 
         $this->assertCount(1, $payroll['employees']);

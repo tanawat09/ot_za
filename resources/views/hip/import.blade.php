@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'นำเข้าข้อมูลสแกน HIP Premium Time')
-@section('header', 'นำเข้าข้อมูลสแกนนิ้ว/ใบหน้าจาก HIP Premium Time v2.0 / v6')
+@section('header', 'นำเข้าข้อมูลสแกนเวลาจาก HIP Premium Time v2.0 / v6 (Excel / Access .mdb / CSV)')
 
 @section('content')
 <div class="row justify-content-center">
@@ -11,18 +11,19 @@
                 <h5 class="fw-bold font-heading mb-0 text-dark">
                     <i class="bi bi-fingerprint text-primary me-2"></i>นำเข้าข้อมูลเวลาสแกน (HIP Premium Time Integration)
                 </h5>
-                <a href="{{ route('hip.sample-template') }}" class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-file-earmark-spreadsheet me-1"></i> ดาวน์โหลดไฟล์ตัวอย่าง HIP (CSV)
+                <a href="{{ route('hip.sample-template') }}" class="btn btn-sm btn-outline-success font-heading fw-bold">
+                    <i class="bi bi-file-earmark-spreadsheet me-1"></i> ดาวน์โหลดไฟล์ตัวอย่าง HIP (CSV/Excel)
                 </a>
             </div>
 
             <div class="alert alert-info border-info d-flex align-items-start gap-2 mb-4">
                 <i class="bi bi-info-circle-fill fs-5 text-info mt-1"></i>
                 <div class="fs-7">
-                    <strong>คำแนะนำการนำเข้าไฟล์จาก HIP Premium Time v2.0 / v6:</strong><br>
-                    * รองรับไฟล์ส่งออกจากโปรแกรม HIP ในรูปแบบ <strong>CSV (.csv)</strong> หรือ <strong>Text (.txt)</strong><br>
-                    * คอลัมน์ที่ต้องมี: <code>รหัสพนักงาน (emp_code)</code>, <code>วันที่สแกน (YYYY-MM-DD)</code>, <code>เวลาเข้า (HH:MM)</code>, <code>เวลาออก (HH:MM)</code><br>
-                    * ระบบจะนำเวลาเข้า-ออกไป <strong>จับคู่กับคำขอ OT ที่ได้รับการอนุมัติอัตโนมัติ</strong> เพื่อคำนวณชั่วโมงปฏิบัติงานจริง
+                    <strong>รูปแบบไฟล์ที่รองรับจากโปรแกรม HIP Premium Time v2.0 / v6:</strong><br>
+                    * 📊 <strong>ไฟล์รายงาน Excel (.xlsx, .xls)</strong> หรือ <strong>CSV (.csv)</strong> ที่ส่งออกจาก HIP Premium Time (มีคอลัมน์ <code>รหัสที่เครื่อง</code>, <code>ชื่อ-นามสกุล</code>, <code>Date</code>, <code>1</code>, <code>2</code>)<br>
+                    * 🗄️ <strong>ไฟล์ฐานข้อมูล MS Access (.mdb)</strong> จากโฟลเดอร์โปรแกรม HIP (เช่น <code>pm2005.mdb</code> หรือ <code>att2000.mdb</code>)<br>
+                    * 📝 <strong>ไฟล์ข้อความ Text (.txt, .dat)</strong><br>
+                    * ระบบจะนำเวลาเข้า-ออกไป <strong>จับคู่กับคำขอ OT ที่อนุมัติแล้วให้อัตโนมัติ</strong> พร้อมคำนวณชั่วโมงปฏิบัติงานจริง
                 </div>
             </div>
 
@@ -31,22 +32,25 @@
 
                 <!-- File Upload Box -->
                 <div class="mb-4">
-                    <label for="file" class="form-label font-heading text-dark fw-bold">1. เลือกไฟล์ข้อมูลจาก HIP Premium Time (CSV / Text File)</label>
-                    <input type="file" name="file" id="file" class="form-control @error('file') is-invalid @enderror" accept=".csv,.txt,.dat,.xlsx,.xls">
+                    <label for="file" class="form-label font-heading text-dark fw-bold">
+                        1. เลือกไฟล์จากโปรแกรม HIP Premium Time (Excel / MS Access .mdb / CSV / Text)
+                    </label>
+                    <input type="file" name="file" id="file" class="form-control @error('file') is-invalid @enderror" accept=".xlsx,.xls,.csv,.mdb,.txt,.dat">
                     @error('file')
                         <div class="text-danger fs-7 mt-1">{{ $message }}</div>
                     @enderror
+                    <div class="form-text fs-7 text-muted">รองรับไฟล์ <code>.xlsx</code>, <code>.xls</code>, <code>.csv</code>, <code>.mdb</code> ขนาดไม่เกิน 20MB</div>
                 </div>
 
                 <div class="text-center my-3 text-muted fw-bold">--- หรือ ---</div>
 
                 <!-- Text Area Input -->
                 <div class="mb-4">
-                    <label for="raw_text" class="form-label font-heading text-dark fw-bold">2. วางข้อความข้อมูลสแกน (Copy & Paste Text Logs)</label>
-                    <textarea name="raw_text" id="raw_text" rows="5" class="form-control font-monospace fs-7" placeholder="ตัวอย่าง:
-EMP001,2026-07-21,17:30,20:30,HIP-DEV-01
-EMP002,2026-07-21,17:30,21:00,HIP-DEV-01"></textarea>
-                    <div class="form-text fs-7 text-muted">รูปแบบ: รหัสพนักงาน, วันที่ (YYYY-MM-DD), เวลาเข้า, เวลาออก, รหัสเครื่อง</div>
+                    <label for="raw_text" class="form-label font-heading text-dark fw-bold">2. วางข้อความตารางสแกน (Copy & Paste จาก Excel / CSV)</label>
+                    <textarea name="raw_text" id="raw_text" rows="6" class="form-control font-monospace fs-7" placeholder="ตัวอย่างจาก HIP Premium Time:
+รหัสที่เครื่อง,รหัสพนักงาน,ชื่อ-นามสกุล,แผนก,Date,1,2,3,4,
+563005,,ปริญวัฒน์  ปิยะอารยาภัสร์,ฝ่ายขนส่ง,01/07/2026,07:54,17:59,,,
+563005,,ปริญวัฒน์  ปิยะอารยาภัสร์,ฝ่ายขนส่ง,02/07/2026,08:00,20:01,,,"></textarea>
                 </div>
 
                 <div class="d-flex justify-content-between align-items-center border-top pt-3">
