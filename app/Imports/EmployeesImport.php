@@ -21,6 +21,29 @@ class EmployeesImport implements ToCollection
     }
 
     /**
+     * Helper to check if a string is a real Department name or keyword.
+     */
+    public static function isRealDepartment(?string $str): bool
+    {
+        if (empty($str)) return false;
+        $str = trim($str);
+
+        // Department keywords
+        $deptKeywords = ['ฝ่าย', 'แผนก', 'สำนัก', 'ส่วน', 'คลัง', 'กลุ่มงาน', 'ศูนย์', 'dept', 'department', 'division', 'office', 'section'];
+        foreach ($deptKeywords as $kw) {
+            if (str_contains(strtolower($str), $kw)) {
+                return true;
+            }
+        }
+
+        // Match existing department in DB
+        return Department::where('code', $str)
+            ->orWhere('name_th', $str)
+            ->orWhere('name_en', $str)
+            ->exists();
+    }
+
+    /**
      * Helper to extract prefix and clean name from raw name string.
      */
     public static function extractPrefixAndName(string $rawName): array
@@ -110,14 +133,15 @@ class EmployeesImport implements ToCollection
             }
 
             // Gather remaining text columns after empCodeColIdx for Name, Surname, Dept
-            $textCols = [];
-            for ($i = $empCodeColIdx + 1; $i < count($cols); $i++) {
+            $textValues = [];
+            for ($i = 0; $i < count($cols); $i++) {
+                if ($i === $empCodeColIdx) continue;
                 if ($cols[$i] !== '') {
-                    $textCols[] = $cols[$i];
+                    $textValues[] = $cols[$i];
                 }
             }
 
-            if (empty($textCols)) continue;
+            if (empty($textValues)) continue;
 
             $prefix = 'นาย';
             $firstName = '';
@@ -126,31 +150,44 @@ class EmployeesImport implements ToCollection
             $posStr = '';
             $salary = 15000.00;
 
-            $firstText = $textCols[0];
-            [$extractedPrefix, $cleanFirstText] = self::extractPrefixAndName($firstText);
+            $val0 = $textValues[0];
+            [$extractedPrefix, $cleanVal0] = self::extractPrefixAndName($val0);
             $prefix = $extractedPrefix;
 
-            $nameWords = preg_split('/\s+/', trim($cleanFirstText));
+            $words0 = preg_split('/\s+/', trim($cleanVal0));
 
-            if (count($nameWords) >= 2) {
-                // First text column contains both First Name and Last Name
-                $firstName = $nameWords[0];
-                $lastName = implode(' ', array_slice($nameWords, 1));
-                $deptStr = $textCols[1] ?? '';
-                $posStr = $textCols[2] ?? '';
-            } else {
-                // First text column is First Name (or Prefix+Name), second text column is Last Name or Dept
-                $firstName = $nameWords[0] ?? $cleanFirstText;
+            if (count($words0) >= 2) {
+                // Val0 contains First Name and Last Name (e.g. "ธิดาวรรณ วงค์")
+                $firstName = $words0[0];
+                $lastName = implode(' ', array_slice($words0, 1));
 
-                if (isset($textCols[1])) {
-                    $c2 = $textCols[1];
-                    $isDeptKeyword = str_contains($c2, 'ฝ่าย') || str_contains($c2, 'แผนก') || str_contains($c2, 'สำนัก') || str_contains($c2, 'ส่วน') || str_contains(strtolower($c2), 'dept');
-                    if ($isDeptKeyword) {
-                        $deptStr = $c2;
+                // Check remaining columns for Department or Position
+                foreach (array_slice($textValues, 1) as $remVal) {
+                    if (self::isRealDepartment($remVal)) {
+                        $deptStr = $remVal;
                     } else {
-                        $lastName = $c2;
-                        $deptStr = $textCols[2] ?? '';
-                        $posStr = $textCols[3] ?? '';
+                        $posStr = $remVal;
+                    }
+                }
+            } else {
+                // Val0 is First Name only
+                $firstName = $words0[0] ?? $cleanVal0;
+
+                if (count($textValues) >= 2) {
+                    $val1 = $textValues[1];
+                    if (self::isRealDepartment($val1)) {
+                        $deptStr = $val1;
+                    } else {
+                        $lastName = $val1;
+                    }
+
+                    if (count($textValues) >= 3) {
+                        $val2 = $textValues[2];
+                        if (self::isRealDepartment($val2)) {
+                            $deptStr = $val2;
+                        } else {
+                            $posStr = $val2;
+                        }
                     }
                 }
             }

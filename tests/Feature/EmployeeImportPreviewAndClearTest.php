@@ -50,6 +50,14 @@ class EmployeeImportPreviewAndClearTest extends TestCase
         $this->assertDatabaseCount('employees', 0);
     }
 
+    public function test_is_real_department_validation(): void
+    {
+        $this->assertFalse(EmployeesImport::isRealDepartment('วงค์'));
+        $this->assertFalse(EmployeesImport::isRealDepartment('สีหะวงษ์'));
+        $this->assertTrue(EmployeesImport::isRealDepartment('ฝ่ายขนส่ง'));
+        $this->assertTrue(EmployeesImport::isRealDepartment('LOG'));
+    }
+
     public function test_extract_prefix_and_name(): void
     {
         [$prefix1, $name1] = EmployeesImport::extractPrefixAndName('น.ส. ธิดาวรรณ');
@@ -74,21 +82,21 @@ class EmployeeImportPreviewAndClearTest extends TestCase
 
         $this->assertCount(3, $preview);
 
-        // Row 10 check
+        // Row 10 check: surname 'วงค์' must NEVER be assigned to department_name!
         $this->assertEquals('00010', $preview[0]['emp_code']);
         $this->assertEquals('นางสาว', $preview[0]['prefix']);
         $this->assertEquals('ธิดาวรรณ', $preview[0]['first_name']);
         $this->assertEquals('วงค์', $preview[0]['last_name']);
         $this->assertEquals('แผนกทั่วไป', $preview[0]['department_name']);
 
-        // Row 13 check
+        // Row 13 check: surname 'วงษ์มณี' must NEVER be assigned to department_name!
         $this->assertEquals('00013', $preview[1]['emp_code']);
         $this->assertEquals('นางสาว', $preview[1]['prefix']);
         $this->assertEquals('ฐิตวรรณภรณ์', $preview[1]['first_name']);
         $this->assertEquals('วงษ์มณี', $preview[1]['last_name']);
         $this->assertEquals('แผนกทั่วไป', $preview[1]['department_name']);
 
-        // Row 15 check (trailing - stripped)
+        // Row 15 check
         $this->assertEquals('00015', $preview[2]['emp_code']);
         $this->assertEquals('นาย', $preview[2]['prefix']);
         $this->assertEquals('เทพพร', $preview[2]['first_name']);
