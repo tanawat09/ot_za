@@ -132,7 +132,7 @@ class EmployeesImport implements ToCollection
                 }
 
                 if (preg_match('/^[A-Za-z0-9_-]{1,20}$/', $val)) {
-                    if (ctype_digit($val) && (int)$val < 1000) {
+                    if (ctype_digit($val) && (int)$val < 5000) {
                         $nextCol = $cols[$idx + 1] ?? '';
                         if (!empty($nextCol) && preg_match('/^[A-Za-z0-9_-]{1,20}$/', $nextCol) && !in_array(mb_strtolower($nextCol), ['รหัสพนักงาน', 'ลำดับ'])) {
                             continue;
@@ -162,7 +162,7 @@ class EmployeesImport implements ToCollection
                 $empCode = sprintf('%05d', (int)$empCode);
             }
 
-            // 2. Gather text columns excluding empCodeColIdx
+            // 2. Gather non-empty text columns excluding empCodeColIdx
             $textValues = [];
             foreach ($cols as $i => $val) {
                 if ($i === $empCodeColIdx) continue;
@@ -173,9 +173,12 @@ class EmployeesImport implements ToCollection
 
             if (empty($textValues)) continue;
 
-            if (ctype_digit($textValues[0]) && (int)$textValues[0] < 1000 && count($textValues) > 1) {
+            // If the first text value is a small sequence number, drop it
+            if (ctype_digit($textValues[0]) && (int)$textValues[0] < 5000 && count($textValues) > 1) {
                 array_shift($textValues);
             }
+
+            if (empty($textValues)) continue;
 
             $prefix = 'นาย';
             $firstName = '';
@@ -184,14 +187,23 @@ class EmployeesImport implements ToCollection
             $posStr = '';
             $salary = 15000.00;
 
-            $val0 = $textValues[0];
-            [$extractedPrefix, $cleanVal0] = self::extractPrefixAndName($val0);
+            // Check if textValues[0] is a standalone prefix (e.g. "นาย", "น.ส.", "นางสาว", "MRS.")
+            [$extractedPrefix, $cleanVal0] = self::extractPrefixAndName($textValues[0]);
             $prefix = $extractedPrefix;
+
+            if ($cleanVal0 === '' && count($textValues) >= 2) {
+                // Shift standalone prefix column so textValues[0] becomes First Name ("วรภัทร")
+                array_shift($textValues);
+                $val0 = $textValues[0];
+                [$unusedPrefix, $cleanVal0] = self::extractPrefixAndName($val0);
+            } else {
+                $val0 = $cleanVal0;
+            }
 
             $words0 = preg_split('/\s+/', trim($cleanVal0));
 
             if (count($words0) >= 2) {
-                // Val0 contains First Name and Last Name
+                // First text column contains both First Name and Last Name
                 $firstName = $words0[0];
                 $lastName = implode(' ', array_slice($words0, 1));
 
@@ -203,7 +215,7 @@ class EmployeesImport implements ToCollection
                     }
                 }
             } else {
-                // Val0 is First Name only
+                // First text column is First Name only
                 $firstName = $words0[0] ?? $cleanVal0;
 
                 if (count($textValues) >= 2) {
