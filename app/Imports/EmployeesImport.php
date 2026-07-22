@@ -36,8 +36,9 @@ class EmployeesImport implements ToCollection
             }
         }
 
-        // Match existing department in DB
-        return Department::where('code', $str)
+        // Match existing department in DB including soft deleted
+        return Department::withTrashed()
+            ->where('code', $str)
             ->orWhere('name_th', $str)
             ->orWhere('name_en', $str)
             ->exists();
@@ -302,17 +303,22 @@ class EmployeesImport implements ToCollection
             $deptName = !empty($item['department_name']) ? trim($item['department_name']) : 'แผนกทั่วไป';
             $posName = !empty($item['position_title']) ? trim($item['position_title']) : null;
 
-            // Department Match or Create safely with unique code check
-            $department = Department::where('name_th', $deptName)
+            // Department Match or Create (with SoftDeletes support)
+            $department = Department::withTrashed()
+                ->where('name_th', $deptName)
                 ->orWhere('code', $deptName)
                 ->orWhere('name_th', 'like', "%{$deptName}%")
                 ->first();
 
-            if (!$department) {
+            if ($department) {
+                if ($department->trashed()) {
+                    $department->restore();
+                }
+            } else {
                 $baseCode = strtoupper(substr(md5($deptName), 0, 8));
                 $code = $baseCode;
                 $counter = 1;
-                while (Department::where('code', $code)->exists()) {
+                while (Department::withTrashed()->where('code', $code)->exists()) {
                     $code = $baseCode . '_' . $counter++;
                 }
 
@@ -323,19 +329,24 @@ class EmployeesImport implements ToCollection
                 ]);
             }
 
-            // Position Match or Create safely with unique code check
+            // Position Match or Create (with SoftDeletes support)
             $position = null;
             if (!empty($posName) && $posName !== '-') {
-                $position = Position::where('title_th', $posName)
+                $position = Position::withTrashed()
+                    ->where('title_th', $posName)
                     ->orWhere('code', $posName)
                     ->orWhere('title_th', 'like', "%{$posName}%")
                     ->first();
 
-                if (!$position) {
+                if ($position) {
+                    if ($position->trashed()) {
+                        $position->restore();
+                    }
+                } else {
                     $baseCode = strtoupper(substr(md5($posName), 0, 8));
                     $code = $baseCode;
                     $counter = 1;
-                    while (Position::where('code', $code)->exists()) {
+                    while (Position::withTrashed()->where('code', $code)->exists()) {
                         $code = $baseCode . '_' . $counter++;
                     }
 
@@ -347,10 +358,13 @@ class EmployeesImport implements ToCollection
                 }
             }
 
-            $existing = Employee::where('emp_code', $empCode)->first();
+            $existing = Employee::withTrashed()->where('emp_code', $empCode)->first();
             $salary = isset($item['salary']) ? (float)$item['salary'] : 15000.00;
 
             if ($existing) {
+                if ($existing->trashed()) {
+                    $existing->restore();
+                }
                 $existing->update([
                     'prefix' => $item['prefix'] ?? 'นาย',
                     'first_name' => $firstName,
