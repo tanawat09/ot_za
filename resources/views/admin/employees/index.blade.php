@@ -9,16 +9,22 @@
         <h5 class="fw-bold font-heading mb-0">
             <i class="bi bi-person-vcard text-primary me-2"></i>รายชื่อพนักงานทั้งหมด
         </h5>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
             <a href="{{ route('admin.employees.export') }}" class="btn btn-outline-success">
                 <i class="bi bi-file-earmark-excel me-1"></i> Export Excel
             </a>
             <a href="{{ route('admin.employees.import-form') }}" class="btn btn-outline-primary">
-                <i class="bi bi-file-earmark-arrow-up me-1"></i> Import Excel
+                <i class="bi bi-file-earmark-arrow-up me-1"></i> Import Excel (พรีวิว)
             </a>
             <a href="{{ route('admin.employees.create') }}" class="btn btn-primary">
                 <i class="bi bi-plus-circle me-1"></i> เพิ่มพนักงานใหม่
             </a>
+            <form method="POST" action="{{ route('admin.employees.clear-all') }}" onsubmit="return confirm('⚠️ คำเตือน: คุณต้องการลบข้อมูลพนักงานทั้งหมดในระบบใช่หรือไม่?\n\nการกระทำนี้ไม่สามารถย้อนกลับได้!');" class="d-inline">
+                @csrf
+                <button type="submit" class="btn btn-outline-danger" title="ล้างข้อมูลพนักงานทั้งหมดเพื่อเริ่มนำเข้าใหม่">
+                    <i class="bi bi-trash-fill me-1"></i> ล้างข้อมูลพนักงานทั้งหมด
+                </button>
+            </form>
         </div>
     </div>
 

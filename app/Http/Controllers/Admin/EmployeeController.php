@@ -12,6 +12,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -177,6 +178,17 @@ class EmployeeController extends Controller
         return redirect()->route('admin.employees.index')->with('success', 'ลบข้อมูลพนักงานสำเร็จ');
     }
 
+    public function clearAll()
+    {
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
+        Employee::query()->forceDelete();
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
+
+        AuditLogService::log(action: 'Clear All Employees Data', module: 'Master Data');
+
+        return redirect()->route('admin.employees.index')->with('success', 'ลบข้อมูลพนักงานทั้งหมดในระบบเรียบร้อยแล้ว ท่านสามารถเริ่มนำเข้าไฟล์ใหม่ได้');
+    }
+
     public function export()
     {
         AuditLogService::log(action: 'Export Employees Excel', module: 'Master Data');
@@ -188,7 +200,10 @@ class EmployeeController extends Controller
         return view('admin.employees.import');
     }
 
-    public function import(Request $request)
+    /**
+     * Step 1: Preview & Validate Excel File before DB Insertion
+     */
+    public function previewImport(Request $request)
     {
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
@@ -202,18 +217,38 @@ class EmployeeController extends Controller
             $import = new EmployeesImport();
             Excel::import($import, $request->file('file'));
 
-            AuditLogService::log(action: 'Import Employees Excel', module: 'Master Data');
+            $previewRows = $import->previewRows;
+            $newCount = collect($previewRows)->where('status', 'NEW')->count();
+            $updateCount = collect($previewRows)->where('status', 'UPDATE')->count();
 
-            $total = $import->importedCount + $import->updatedCount;
-            if ($total > 0) {
-                $msg = "นำเข้าและอัปเดตข้อมูลพนักงานสำเร็จ {$total} รายการ (เพิ่มใหม่ {$import->importedCount} รายการ, อัปเดตเดิม {$import->updatedCount} รายการ)";
-                return redirect()->route('admin.employees.index')->with('success', $msg);
+            if (empty($previewRows)) {
+                return redirect()->back()->with('warning', 'อ่านไฟล์สำเร็จ แต่ไม่พบรายการพนักงานในไฟล์ กรุณาตรวจสอบว่ามีข้อมูลในไฟล์');
             }
 
-            return redirect()->back()->with('warning', 'อ่านไฟล์สำเร็จ แต่ไม่พบรายการพนักงานในไฟล์ กรุณาตรวจสอบว่ามีข้อมูลในไฟล์');
+            return view('admin.employees.preview', compact('previewRows', 'newCount', 'updateCount'));
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'เกิดข้อผิดพลาดในการนำเข้าไฟล์: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'เกิดข้อผิดพลาดในการอ่านไฟล์: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Step 2: Confirm & Commit Import into DB
+     */
+    public function confirmImport(Request $request)
+    {
+        $itemsJson = $request->input('preview_items');
+        $items = json_decode($itemsJson, true);
+
+        if (empty($items)) {
+            return redirect()->route('admin.employees.import-form')->with('error', 'ไม่พบรายการข้อมูลที่จะนำเข้า');
+        }
+
+        $result = EmployeesImport::executeImport($items);
+
+        AuditLogService::log(action: 'Confirm Import Employees', module: 'Master Data', newValues: ['imported' => $result['imported'], 'updated' => $result['updated']]);
+
+        $msg = "นำเข้าและอัปเดตข้อมูลพนักงานเข้าสู่ระบบสำเร็จรวม {$result['total']} รายการ (เพิ่มพนักงานใหม่ {$result['imported']} รายการ, อัปเดตข้อมูลเดิม {$result['updated']} รายการ)";
+        return redirect()->route('admin.employees.index')->with('success', $msg);
     }
 
     public function sampleTemplate()
@@ -223,7 +258,7 @@ class EmployeeController extends Controller
 
         return Response::make("\xEF\xBB\xBF" . $csvHeader . $sampleData, 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="Employee_Import_Template.csv"',
+            'Content-Disposition' => 'attachment; filename=Employee_Import_Template.csv',
         ]);
     }
 }
