@@ -2,8 +2,7 @@
 
 namespace App\Exports;
 
-use App\Enums\OvertimeStatus;
-use App\Models\OvertimeRequestEmployee;
+use App\Services\PayrollService;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -23,17 +22,8 @@ class PayrollExport implements FromCollection, WithHeadings, WithMapping
 
     public function collection()
     {
-        $query = OvertimeRequestEmployee::whereHas('overtimeRequest', function ($q) {
-            $q->where('status', OvertimeStatus::APPROVED)
-              ->whereYear('request_date', $this->year)
-              ->whereMonth('request_date', $this->month);
-
-            if ($this->departmentId) {
-                $q->where('department_id', $this->departmentId);
-            }
-        })->with(['employee.department', 'employee.position', 'overtimeRequest.overtimeType']);
-
-        return $query->get();
+        $data = PayrollService::calculateMonthlyPayroll($this->year, $this->month, $this->departmentId);
+        return collect($data['employees']);
     }
 
     public function headings(): array
@@ -43,34 +33,38 @@ class PayrollExport implements FromCollection, WithHeadings, WithMapping
             'ชื่อ-นามสกุล',
             'แผนก',
             'ตำแหน่ง',
-            'เลขที่เอกสาร OT',
-            'วันที่ทำ OT',
-            'ประเภท OT',
-            'ตัวคูณ (Multiplier)',
-            'เวลาแผนงาน (ชม.)',
-            'เวลาจริง (ชม.)',
-            'ชั่วโมงคำนวณเงิน',
+            'ฐานเงินเดือน/ค่าจ้าง (บาท)',
+            'อัตราค่าจ้างต่อชั่วโมง (บาท/ชม.)',
+            'ชั่วโมง OT 1.5 เท่า',
+            'ชั่วโมง OT 3.0 เท่า',
+            'ชั่วโมง OT 1.0 เท่า',
+            'รวมชั่วโมง OT ทั้งหมด',
+            'ค่าตอบแทน OT 1.5 เท่า (บาท)',
+            'ค่าตอบแทน OT 3.0 เท่า (บาท)',
+            'ค่าตอบแทน OT 1.0 เท่า (บาท)',
+            'รวมเงินค่า OT ทั้งหมด (บาท)',
+            'รวมเงินรายรับสุทธิ (เงินเดือน + OT)',
         ];
     }
 
     public function map($row): array
     {
-        $emp = $row->employee;
-        $req = $row->overtimeRequest;
-        $actual = $row->actual_hours ?? $row->planned_hours;
-
         return [
-            $emp?->emp_code,
-            $emp?->full_name,
-            $emp?->department?->name_th,
-            $emp?->position?->title_th ?? '-',
-            $req?->document_no,
-            $req?->request_date->format('d/m/Y'),
-            $req?->overtimeType?->name_th,
-            $req?->overtimeType?->multiplier,
-            $row->planned_hours,
-            $actual,
-            round($actual * ($req?->overtimeType?->multiplier ?? 1.5), 2),
+            $row['emp_code'],
+            $row['full_name'],
+            $row['department_name'],
+            $row['position_title'],
+            number_format($row['base_salary'], 2),
+            number_format($row['hourly_rate'], 2),
+            $row['hours_1_5'],
+            $row['hours_3_0'],
+            $row['hours_1_0'],
+            $row['total_hours'],
+            number_format($row['ot_pay_1_5'], 2),
+            number_format($row['ot_pay_3_0'], 2),
+            number_format($row['ot_pay_1_0'], 2),
+            number_format($row['total_ot_pay'], 2),
+            number_format($row['net_pay'], 2),
         ];
     }
 }

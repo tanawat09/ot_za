@@ -33,19 +33,26 @@
             </a>
         @endhasanyrole
 
-        <!-- Monthly Period Lock & Payroll Export (Phase 7 - HR & Admin) -->
-        @hasanyrole('HR|Super Admin')
+        <!-- Monthly Period Lock, HIP Scan & Payroll Export (HR & Admin) -->
+        @hasanyrole('HR|Super Admin|Supervisor')
             <div class="px-3 pt-3 pb-1 text-uppercase fs-7 text-muted fw-bold">จัดการรอบเวลาและเงินเดือน</div>
             
-            <a href="{{ route('monthly-locks.index') }}" class="list-group-item {{ request()->routeIs('monthly-locks.*') ? 'active' : '' }}">
-                <i class="bi bi-lock-fill fs-5"></i>
-                <span>ปิดรอบประจำเดือน (Period Locks)</span>
+            <a href="{{ route('hip.index') }}" class="list-group-item {{ request()->routeIs('hip.*') ? 'active' : '' }}">
+                <i class="bi bi-fingerprint fs-5 text-primary"></i>
+                <span>ข้อมูลสแกน HIP (HIP Time Scan)</span>
             </a>
 
-            <a href="{{ route('payroll.index') }}" class="list-group-item {{ request()->routeIs('payroll.*') ? 'active' : '' }}">
-                <i class="bi bi-currency-dollar fs-5"></i>
-                <span>ส่งออกเงินเดือน (Payroll Export)</span>
-            </a>
+            @hasanyrole('HR|Super Admin')
+                <a href="{{ route('monthly-locks.index') }}" class="list-group-item {{ request()->routeIs('monthly-locks.*') ? 'active' : '' }}">
+                    <i class="bi bi-lock-fill fs-5"></i>
+                    <span>ปิดรอบประจำเดือน (Period Locks)</span>
+                </a>
+
+                <a href="{{ route('payroll.index') }}" class="list-group-item {{ request()->routeIs('payroll.*') ? 'active' : '' }}">
+                    <i class="bi bi-currency-dollar fs-5 text-success"></i>
+                    <span>คำนวณเงินเดือน & จ่าย OT</span>
+                </a>
+            @endhasanyrole
         @endhasanyrole
 
         <!-- Reports Menu (Phase 6) -->

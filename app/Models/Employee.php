@@ -21,12 +21,27 @@ class Employee extends Model
         'team_id',
         'email',
         'phone',
+        'salary',
+        'wage_type',
         'status',
     ];
 
     public function getFullNameAttribute()
     {
         return trim("{$this->prefix} {$this->first_name} {$this->last_name}");
+    }
+
+    /**
+     * Calculate hourly wage rate for OT calculation
+     */
+    public function getHourlyRateAttribute(): float
+    {
+        $salary = (float) ($this->salary ?? 15000);
+        if ($this->wage_type === 'Daily') {
+            return round($salary / 8, 2);
+        }
+        // Monthly: Daily rate = salary / 30, Hourly rate = Daily rate / 8
+        return round(($salary / 30) / 8, 2);
     }
 
     public function user()

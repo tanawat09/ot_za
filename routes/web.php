@@ -69,10 +69,18 @@ Route::middleware(['auth', CheckActiveUser::class])->group(function () {
             Route::post('toggle', [\App\Http\Controllers\MonthlyLockController::class, 'toggle'])->name('toggle');
         });
 
-        // Payroll Export (Phase 7 - HR & Super Admin)
+        // HIP Premium Time Integration Routes
+        Route::middleware(['role:HR|Super Admin|Supervisor'])->prefix('hip')->name('hip.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\HipAttendanceController::class, 'index'])->name('index');
+            Route::get('import', [\App\Http\Controllers\HipAttendanceController::class, 'create'])->name('create');
+            Route::post('import', [\App\Http\Controllers\HipAttendanceController::class, 'store'])->name('store');
+            Route::get('sample-template', [\App\Http\Controllers\HipAttendanceController::class, 'sampleTemplate'])->name('sample-template');
+        });
+
+        // Payroll Export & OT Payment Summary (HR & Super Admin)
         Route::middleware(['role:HR|Super Admin'])->prefix('payroll')->name('payroll.')->group(function () {
             Route::get('/', [\App\Http\Controllers\PayrollExportController::class, 'index'])->name('index');
-            Route::get('export', [\App\Http\Controllers\PayrollExportController::class, 'export'])->name('export');
+            Route::match(['get', 'post'], 'export', [\App\Http\Controllers\PayrollExportController::class, 'export'])->name('export');
         });
 
         // Reports Routes (Phase 6)
