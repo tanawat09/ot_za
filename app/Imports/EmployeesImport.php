@@ -49,31 +49,43 @@ class EmployeesImport implements ToCollection
     public static function extractPrefixAndName(string $rawName): array
     {
         $rawName = trim($rawName);
-        $prefix = 'นาย';
+        $prefix = '';
 
         $prefixMap = [
-            'นางสาว' => 'นางสาว',
-            'น.ส.'   => 'นางสาว',
-            'น.ส'    => 'นางสาว',
-            'นส.'    => 'นางสาว',
-            'นาง'    => 'นาง',
-            'นาย'    => 'นาย',
-            'Mr.'    => 'นาย',
-            'Mr'     => 'นาย',
-            'Mrs.'   => 'นาง',
-            'Mrs'    => 'นาง',
-            'Ms.'    => 'นางสาว',
-            'Ms'     => 'นางสาว',
-            'ด.ช.'   => 'เด็กชาย',
-            'ด.ญ.'   => 'เด็กหญิง',
+            'ว่าที่ ร.ต.หญิง' => 'ว่าที่ ร.ต.หญิง',
+            'ว่าที่ ร.ต.'     => 'ว่าที่ ร.ต.',
+            'นางสาว'          => 'นางสาว',
+            'น.ส.'            => 'นางสาว',
+            'น.ส'             => 'นางสาว',
+            'นส.'            => 'นางสาว',
+            'นาง'             => 'นาง',
+            'นาย'             => 'นาย',
+            'MRS.'            => 'นาง',
+            'MRS'             => 'นาง',
+            'MR.'             => 'นาย',
+            'MR'              => 'นาย',
+            'MS.'             => 'นางสาว',
+            'MS'              => 'นางสาว',
+            'Mr.'             => 'นาย',
+            'Mr'              => 'นาย',
+            'Mrs.'            => 'นาง',
+            'Mrs'             => 'นาง',
+            'Ms.'             => 'นางสาว',
+            'Ms'              => 'นางสาว',
+            'ด.ช.'            => 'เด็กชาย',
+            'ด.ญ.'            => 'เด็กหญิง',
         ];
 
         foreach ($prefixMap as $pKey => $pVal) {
-            if (str_starts_with($rawName, $pKey)) {
+            if (str_starts_with(mb_strtoupper($rawName), mb_strtoupper($pKey))) {
                 $prefix = $pVal;
                 $rawName = trim(mb_substr($rawName, mb_strlen($pKey)));
                 break;
             }
+        }
+
+        if (empty($prefix)) {
+            $prefix = 'นาย';
         }
 
         return [$prefix, $rawName];
@@ -108,21 +120,31 @@ class EmployeesImport implements ToCollection
                 }
             }
 
-            // Find Emp Code column intelligently
+            // Determine empCode from Col 0 or Col 1
             $empCode = '';
             $empCodeColIdx = -1;
 
-            foreach ($cols as $idx => $val) {
-                if (empty($val)) continue;
-                if (preg_match('/^[A-Za-z0-9_-]{1,20}$/', $val) && $val !== 'รหัสพนักงาน' && $val !== 'ลำดับ' && $val !== 'No') {
-                    // Check if $val is a sequence number like 1, 2, 3 and next col is actual emp code
-                    if (ctype_digit($val) && (int)$val < 500 && isset($cols[$idx + 1]) && preg_match('/^[A-Za-z0-9_-]{3,20}$/', $cols[$idx + 1]) && !preg_match('/[\x{0E00}-\x{0E7F}]/u', $cols[$idx + 1])) {
-                        continue;
-                    }
-                    $empCode = $val;
-                    $empCodeColIdx = $idx;
-                    break;
+            $c0 = $cols[0] ?? '';
+            $c1 = $cols[1] ?? '';
+
+            if (empty($c0)) {
+                if (!empty($c1) && $c1 !== 'รหัสพนักงาน' && $c1 !== 'ลำดับ') {
+                    $empCode = $c1;
+                    $empCodeColIdx = 1;
                 }
+            } elseif (preg_match('/^[A-Za-z0-9_-]{1,20}$/', $c0) && $c0 !== 'รหัสพนักงาน' && $c0 !== 'ลำดับ' && $c0 !== 'No' && $c0 !== '#') {
+                if (ctype_digit($c0) && (int)$c0 < 5000 && !empty($c1) && preg_match('/^[A-Za-z0-9_-]{1,20}$/', $c1) && $c1 !== 'รหัสพนักงาน') {
+                    // c0 is sequence number (1, 2, 3...), c1 is emp code (00001, 00002...)
+                    $empCode = $c1;
+                    $empCodeColIdx = 1;
+                } else {
+                    // c0 is emp code
+                    $empCode = $c0;
+                    $empCodeColIdx = 0;
+                }
+            } elseif (!empty($c1) && preg_match('/^[A-Za-z0-9_-]{1,20}$/', $c1) && $c1 !== 'รหัสพนักงาน') {
+                $empCode = $c1;
+                $empCodeColIdx = 1;
             }
 
             if (empty($empCode)) continue;
@@ -151,13 +173,20 @@ class EmployeesImport implements ToCollection
             $salary = 15000.00;
 
             $val0 = $textValues[0];
+
+            // Check if val0 is just sequence number (e.g. "2", "3") when empCodeColIdx was 1
+            if (ctype_digit($val0) && (int)$val0 < 5000 && count($textValues) >= 2) {
+                array_shift($textValues);
+                $val0 = $textValues[0];
+            }
+
             [$extractedPrefix, $cleanVal0] = self::extractPrefixAndName($val0);
             $prefix = $extractedPrefix;
 
             $words0 = preg_split('/\s+/', trim($cleanVal0));
 
             if (count($words0) >= 2) {
-                // Val0 contains First Name and Last Name (e.g. "ธิดาวรรณ วงค์")
+                // Val0 contains First Name and Last Name (e.g. "วรภัทร พุฒพันธ์")
                 $firstName = $words0[0];
                 $lastName = implode(' ', array_slice($words0, 1));
 

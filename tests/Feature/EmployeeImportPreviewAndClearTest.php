@@ -67,50 +67,61 @@ class EmployeeImportPreviewAndClearTest extends TestCase
         [$prefix2, $name2] = EmployeesImport::extractPrefixAndName('นาย วรภัทร');
         $this->assertEquals('นาย', $prefix2);
         $this->assertEquals('วรภัทร', $name2);
+
+        [$prefix3, $name3] = EmployeesImport::extractPrefixAndName('MRS. PAYKHAM');
+        $this->assertEquals('นาง', $prefix3);
+        $this->assertEquals('PAYKHAM', $name3);
+
+        [$prefix4, $name4] = EmployeesImport::extractPrefixAndName('MR. CHEK');
+        $this->assertEquals('นาย', $prefix4);
+        $this->assertEquals('CHEK', $name4);
     }
 
-    public function test_preview_rows_parsing(): void
+    public function test_preview_rows_parsing_thai_and_english(): void
     {
         $rows = collect([
-            collect(['รหัสพนักงาน', 'ชื่อ', 'นามสกุล', 'แผนก']),
-            collect(['00010', 'น.ส. ธิดาวรรณ', 'วงค์', '']),
-            collect(['00013', 'น.ส. ฐิตวรรณภรณ์', 'วงษ์มณี', '']),
-            collect(['00015', 'เทพพร', 'ธรรมวัติ -', '']),
+            collect(['ลำดับ', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'แผนก']),
+            collect(['2', '00001', 'วรภัทร พุฒพันธ์', '']),
+            collect(['3', '00002', 'คำสอน ใยพันธ์', '']),
+            collect(['57', '00062', 'MRS. PAYKHAM', 'KEOMALAYTHONG']),
+            collect(['62', '00074', 'ว่าที่ ร.ต.หญิง ปริศนา', 'สำนักงาน']),
         ]);
 
         $preview = EmployeesImport::parsePreviewRows($rows);
 
-        $this->assertCount(3, $preview);
+        $this->assertCount(4, $preview);
 
-        // Row 10 check: surname 'วงค์' must NEVER be assigned to department_name!
-        $this->assertEquals('00010', $preview[0]['emp_code']);
-        $this->assertEquals('นางสาว', $preview[0]['prefix']);
-        $this->assertEquals('ธิดาวรรณ', $preview[0]['first_name']);
-        $this->assertEquals('วงค์', $preview[0]['last_name']);
-        $this->assertEquals('แผนกทั่วไป', $preview[0]['department_name']);
+        // Thai Row 2 check
+        $this->assertEquals('00001', $preview[0]['emp_code']);
+        $this->assertEquals('นาย', $preview[0]['prefix']);
+        $this->assertEquals('วรภัทร', $preview[0]['first_name']);
+        $this->assertEquals('พุฒพันธ์', $preview[0]['last_name']);
 
-        // Row 13 check: surname 'วงษ์มณี' must NEVER be assigned to department_name!
-        $this->assertEquals('00013', $preview[1]['emp_code']);
-        $this->assertEquals('นางสาว', $preview[1]['prefix']);
-        $this->assertEquals('ฐิตวรรณภรณ์', $preview[1]['first_name']);
-        $this->assertEquals('วงษ์มณี', $preview[1]['last_name']);
-        $this->assertEquals('แผนกทั่วไป', $preview[1]['department_name']);
+        // Thai Row 3 check
+        $this->assertEquals('00002', $preview[1]['emp_code']);
+        $this->assertEquals('คำสอน', $preview[1]['first_name']);
+        $this->assertEquals('ใยพันธ์', $preview[1]['last_name']);
 
-        // Row 15 check
-        $this->assertEquals('00015', $preview[2]['emp_code']);
-        $this->assertEquals('นาย', $preview[2]['prefix']);
-        $this->assertEquals('เทพพร', $preview[2]['first_name']);
-        $this->assertEquals('ธรรมวัติ', $preview[2]['last_name']);
+        // English Row 57 check (no more นาย MRS.)
+        $this->assertEquals('00062', $preview[2]['emp_code']);
+        $this->assertEquals('นาง', $preview[2]['prefix']);
+        $this->assertEquals('PAYKHAM', $preview[2]['first_name']);
+        $this->assertEquals('นาง PAYKHAM KEOMALAYTHONG', $preview[2]['full_name']);
+
+        // Row 62 check (ว่าที่ ร.ต.หญิง)
+        $this->assertEquals('00074', $preview[3]['emp_code']);
+        $this->assertEquals('ว่าที่ ร.ต.หญิง', $preview[3]['prefix']);
+        $this->assertEquals('ปริศนา', $preview[3]['first_name']);
     }
 
     public function test_execute_import_confirmation(): void
     {
         $items = [
             [
-                'emp_code' => '00010',
-                'prefix' => 'นางสาว',
-                'first_name' => 'ธิดาวรรณ',
-                'last_name' => 'วงค์',
+                'emp_code' => '00001',
+                'prefix' => 'นาย',
+                'first_name' => 'วรภัทร',
+                'last_name' => 'พุฒพันธ์',
                 'department_name' => 'แผนกทั่วไป',
                 'position_title' => '-',
                 'salary' => 15000.00,
@@ -121,10 +132,9 @@ class EmployeeImportPreviewAndClearTest extends TestCase
 
         $this->assertEquals(1, $result['imported']);
         $this->assertDatabaseHas('employees', [
-            'emp_code' => '00010',
-            'prefix' => 'นางสาว',
-            'first_name' => 'ธิดาวรรณ',
-            'last_name' => 'วงค์',
+            'emp_code' => '00001',
+            'first_name' => 'วรภัทร',
+            'last_name' => 'พุฒพันธ์',
         ]);
     }
 }
