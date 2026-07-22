@@ -97,15 +97,51 @@ class DepartmentController extends Controller
         return redirect()->route('admin.departments.index')->with('success', 'อัปเดตข้อมูลแผนกสำเร็จ');
     }
 
-    public function destroy(Department $department)
+    public function destroy(Request $request, Department $department)
     {
+        if ($department->employees()->count() > 0 && !$request->boolean('force')) {
+            return redirect()->back()->with('error', 'ไม่สามารถลบแผนกที่มีพนักงานสังกัดอยู่ได้ (หากต้องการลบ กรุณาย้ายพนักงานก่อนหรือกดเลือกบังคับลบแผนก)');
+        }
+
+        $deptName = $department->name_th;
+
         if ($department->employees()->count() > 0) {
-            return redirect()->back()->with('error', 'ไม่สามารถลบแผนกที่มีพนักงานสังกัดอยู่ได้');
+            $defaultDept = Department::where('code', 'GEN')
+                ->orWhere('name_th', 'แผนกทั่วไป')
+                ->where('id', '!=', $department->id)
+                ->first();
+
+            if (!$defaultDept) {
+                $defaultDept = Department::create([
+                    'code' => 'GEN',
+                    'name_th' => 'แผนกทั่วไป',
+                    'is_active' => true,
+                ]);
+            }
+
+            $department->employees()->update(['department_id' => $defaultDept->id]);
         }
 
         $department->delete();
+
         AuditLogService::log(action: 'Delete Department', module: 'Master Data', recordId: (string)$department->id);
 
-        return redirect()->route('admin.departments.index')->with('success', 'ลบข้อมูลแผนกสำเร็จ');
+        return redirect()->route('admin.departments.index')->with('success', "ลบแผนก {$deptName} สำเร็จ");
+    }
+
+    public function clearUnused()
+    {
+        $deletedCount = 0;
+        $departments = Department::withCount('employees')->where('code', '!=', 'GEN')->where('name_th', '!=', 'แผนกทั่วไป')->get();
+        foreach ($departments as $dept) {
+            if ($dept->employees_count === 0) {
+                $dept->delete();
+                $deletedCount++;
+            }
+        }
+
+        AuditLogService::log(action: 'Clear Unused Departments', module: 'Master Data');
+
+        return redirect()->route('admin.departments.index')->with('success', "ลบแผนกที่ไม่มีพนักงานสังกัดออกสำเร็จทั้งหมด {$deletedCount} แผนก");
     }
 }

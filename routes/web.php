@@ -99,6 +99,7 @@ Route::middleware(['auth', CheckActiveUser::class])->group(function () {
             Route::patch('users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
             Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
 
+            Route::post('departments/clear-unused', [\App\Http\Controllers\Admin\DepartmentController::class, 'clearUnused'])->name('departments.clear-unused');
             Route::resource('departments', \App\Http\Controllers\Admin\DepartmentController::class);
             Route::resource('teams', \App\Http\Controllers\Admin\TeamController::class);
             Route::resource('positions', \App\Http\Controllers\Admin\PositionController::class);
