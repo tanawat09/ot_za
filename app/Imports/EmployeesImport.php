@@ -227,11 +227,13 @@ class EmployeesImport implements ToCollection
                     }
 
                     if (count($textValues) >= 3) {
-                        $val2 = $textValues[2];
-                        if (self::isRealDepartment($val2)) {
-                            $deptStr = $val2;
-                        } else {
-                            $posStr = $val2;
+                        foreach (array_slice($textValues, 2) as $remVal) {
+                            if (empty($remVal)) continue;
+                            if (self::isRealDepartment($remVal)) {
+                                $deptStr = $remVal;
+                            } else {
+                                $posStr = $remVal;
+                            }
                         }
                     }
                 }
@@ -300,30 +302,48 @@ class EmployeesImport implements ToCollection
             $deptName = !empty($item['department_name']) ? trim($item['department_name']) : 'แผนกทั่วไป';
             $posName = !empty($item['position_title']) ? trim($item['position_title']) : null;
 
-            // Department Match or Create
-            $department = Department::where('code', $deptName)
+            // Department Match or Create safely with unique code check
+            $department = Department::where('name_th', $deptName)
+                ->orWhere('code', $deptName)
                 ->orWhere('name_th', 'like', "%{$deptName}%")
                 ->first();
 
             if (!$department) {
-                $department = Department::firstOrCreate(
-                    ['name_th' => $deptName],
-                    ['code' => strtoupper(substr(md5($deptName), 0, 8)), 'is_active' => true]
-                );
+                $baseCode = strtoupper(substr(md5($deptName), 0, 8));
+                $code = $baseCode;
+                $counter = 1;
+                while (Department::where('code', $code)->exists()) {
+                    $code = $baseCode . '_' . $counter++;
+                }
+
+                $department = Department::create([
+                    'name_th' => $deptName,
+                    'code' => $code,
+                    'is_active' => true,
+                ]);
             }
 
-            // Position Match or Create
+            // Position Match or Create safely with unique code check
             $position = null;
             if (!empty($posName) && $posName !== '-') {
-                $position = Position::where('code', $posName)
+                $position = Position::where('title_th', $posName)
+                    ->orWhere('code', $posName)
                     ->orWhere('title_th', 'like', "%{$posName}%")
                     ->first();
 
                 if (!$position) {
-                    $position = Position::firstOrCreate(
-                        ['title_th' => $posName],
-                        ['code' => strtoupper(substr(md5($posName), 0, 8)), 'is_active' => true]
-                    );
+                    $baseCode = strtoupper(substr(md5($posName), 0, 8));
+                    $code = $baseCode;
+                    $counter = 1;
+                    while (Position::where('code', $code)->exists()) {
+                        $code = $baseCode . '_' . $counter++;
+                    }
+
+                    $position = Position::create([
+                        'title_th' => $posName,
+                        'code' => $code,
+                        'is_active' => true,
+                    ]);
                 }
             }
 
