@@ -12,6 +12,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Response;
 use Maatwebsite\Excel\Facades\Excel;
 
 class EmployeeController extends Controller
@@ -73,6 +74,8 @@ class EmployeeController extends Controller
             'team_id' => ['nullable', 'exists:teams,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'salary' => ['nullable', 'numeric', 'min:0'],
+            'wage_type' => ['nullable', 'in:Monthly,Daily'],
             'status' => ['required', 'in:Active,Resigned,Suspended'],
             'supervisors' => ['nullable', 'array'],
             'supervisors.*' => ['exists:users,id'],
@@ -95,6 +98,8 @@ class EmployeeController extends Controller
             'team_id' => $validated['team_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
+            'salary' => $validated['salary'] ?? 15000.00,
+            'wage_type' => $validated['wage_type'] ?? 'Monthly',
             'status' => $validated['status'],
         ]);
 
@@ -132,6 +137,8 @@ class EmployeeController extends Controller
             'team_id' => ['nullable', 'exists:teams,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'salary' => ['nullable', 'numeric', 'min:0'],
+            'wage_type' => ['nullable', 'in:Monthly,Daily'],
             'status' => ['required', 'in:Active,Resigned,Suspended'],
             'supervisors' => ['nullable', 'array'],
             'supervisors.*' => ['exists:users,id'],
@@ -150,6 +157,8 @@ class EmployeeController extends Controller
             'team_id' => $validated['team_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
+            'salary' => $validated['salary'] ?? 15000.00,
+            'wage_type' => $validated['wage_type'] ?? 'Monthly',
             'status' => $validated['status'],
         ]);
 
@@ -182,16 +191,32 @@ class EmployeeController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => ['required', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
         ], [
-            'file.required' => 'กรุณาเลือกไฟล์ Excel',
-            'file.mimes' => 'ไฟล์ต้องอยู่ในรูปแบบ .xlsx, .xls หรือ .csv',
+            'file.required' => 'กรุณาเลือกไฟล์ Excel หรือ CSV รายชื่อพนักงาน',
+            'file.mimes' => 'อนุญาตเฉพาะไฟล์ .xlsx, .xls, .csv เท่านั้น',
+            'file.max' => 'ขนาดไฟล์ต้องไม่เกิน 10MB',
         ]);
 
-        Excel::import(new EmployeesImport, $request->file('file'));
+        try {
+            Excel::import(new EmployeesImport, $request->file('file'));
 
-        AuditLogService::log(action: 'Import Employees Excel', module: 'Master Data');
+            AuditLogService::log(action: 'Import Employees Excel', module: 'Master Data');
 
-        return redirect()->route('admin.employees.index')->with('success', 'นำเข้าข้อมูลพนักงานจากไฟล์ Excel สำเร็จ');
+            return redirect()->route('admin.employees.index')->with('success', 'นำเข้าและอัปเดตข้อมูลพนักงานจากไฟล์เรียบร้อยแล้ว');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'เกิดข้อผิดพลาดในการนำเข้าไฟล์: ' . $e->getMessage());
+        }
+    }
+
+    public function sampleTemplate()
+    {
+        $csvHeader = "emp_code,prefix,first_name,last_name,department,position,email,phone,salary\n";
+        $sampleData = "EMP001,นาย,สมชาย,ใจดี,ฝ่ายขนส่ง,พนักงานขับรถ,somchai@company.com,0812345678,18000\nEMP002,นางสาว,สมหญิง,รักงาน,ฝ่ายบุคคล,เจ้าหน้าที่บุคคล,somying@company.com,0823456789,22000\nEMP003,นาย,ปริญวัฒน์,ปิยะอารยาภัสร์,ฝ่ายขนส่ง,พนักงานขนส่ง,,0834567890,16500\n";
+
+        return Response::make("\xEF\xBB\xBF" . $csvHeader . $sampleData, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="Employee_Import_Template.csv"',
+        ]);
     }
 }

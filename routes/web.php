@@ -106,6 +106,7 @@ Route::middleware(['auth', CheckActiveUser::class])->group(function () {
             Route::get('employees/export', [\App\Http\Controllers\Admin\EmployeeController::class, 'export'])->name('employees.export');
             Route::get('employees/import', [\App\Http\Controllers\Admin\EmployeeController::class, 'showImportForm'])->name('employees.import-form');
             Route::post('employees/import', [\App\Http\Controllers\Admin\EmployeeController::class, 'import'])->name('employees.import');
+            Route::get('employees/sample-template', [\App\Http\Controllers\Admin\EmployeeController::class, 'sampleTemplate'])->name('employees.sample-template');
             Route::resource('employees', \App\Http\Controllers\Admin\EmployeeController::class);
 
             Route::resource('overtime-types', \App\Http\Controllers\Admin\OvertimeTypeController::class);
