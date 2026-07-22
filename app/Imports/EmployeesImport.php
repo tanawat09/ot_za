@@ -21,6 +21,42 @@ class EmployeesImport implements ToCollection
     }
 
     /**
+     * Helper to extract prefix and clean name from raw name string.
+     */
+    public static function extractPrefixAndName(string $rawName): array
+    {
+        $rawName = trim($rawName);
+        $prefix = 'นาย';
+
+        $prefixMap = [
+            'นางสาว' => 'นางสาว',
+            'น.ส.'   => 'นางสาว',
+            'น.ส'    => 'นางสาว',
+            'นส.'    => 'นางสาว',
+            'นาง'    => 'นาง',
+            'นาย'    => 'นาย',
+            'Mr.'    => 'นาย',
+            'Mr'     => 'นาย',
+            'Mrs.'   => 'นาง',
+            'Mrs'    => 'นาง',
+            'Ms.'    => 'นางสาว',
+            'Ms'     => 'นางสาว',
+            'ด.ช.'   => 'เด็กชาย',
+            'ด.ญ.'   => 'เด็กหญิง',
+        ];
+
+        foreach ($prefixMap as $pKey => $pVal) {
+            if (str_starts_with($rawName, $pKey)) {
+                $prefix = $pVal;
+                $rawName = trim(mb_substr($rawName, mb_strlen($pKey)));
+                break;
+            }
+        }
+
+        return [$prefix, $rawName];
+    }
+
+    /**
      * Parse rows for preview and validation check without mutating database.
      */
     public static function parsePreviewRows(Collection $rows): array
@@ -32,23 +68,30 @@ class EmployeesImport implements ToCollection
             $cols = array_values($row->toArray());
             if (count($cols) < 2) continue;
 
-            $col0 = trim((string)($cols[0] ?? ''));
-            $col1 = trim((string)($cols[1] ?? ''));
-            $col2 = trim((string)($cols[2] ?? ''));
-            $col3 = trim((string)($cols[3] ?? ''));
+            $c0 = trim((string)($cols[0] ?? ''));
+            $c1 = trim((string)($cols[1] ?? ''));
+            $c2 = trim((string)($cols[2] ?? ''));
+            $c3 = trim((string)($cols[3] ?? ''));
+            $c4 = trim((string)($cols[4] ?? ''));
+            $c5 = trim((string)($cols[5] ?? ''));
 
             // Header row detection
             if (
-                str_contains($col0, 'รหัส') || str_contains(strtolower($col0), 'code') || str_contains($col0, 'Device') ||
-                str_contains($col1, 'รหัส') || str_contains(strtolower($col1), 'code') || str_contains($col2, 'ชื่อ') || str_contains(strtolower($col2), 'name')
+                str_contains($c0, 'รหัส') || str_contains(strtolower($c0), 'code') || str_contains($c0, 'Device') ||
+                str_contains($c1, 'รหัส') || str_contains(strtolower($c1), 'code') || str_contains($c2, 'ชื่อ') || str_contains(strtolower($c2), 'name')
             ) {
                 continue;
             }
 
             // Detect Employee Code
-            $empCode = !empty($col0) ? $col0 : (!empty($col1) ? $col1 : '');
+            $empCode = !empty($c0) ? $c0 : (!empty($c1) ? $c1 : '');
+            if (empty($empCode) || $empCode === 'รหัสพนักงาน') continue;
 
-            // Detect Full Name or First Name / Last Name
+            // Format empCode if purely numeric (e.g. 1 -> 00001, 10 -> 00010)
+            if (ctype_digit($empCode) && strlen($empCode) < 5) {
+                $empCode = sprintf('%05d', (int)$empCode);
+            }
+
             $prefix = 'นาย';
             $firstName = '';
             $lastName = '-';
@@ -56,54 +99,54 @@ class EmployeesImport implements ToCollection
             $posStr = '';
             $salary = 15000.00;
 
-            if (!empty($col2) && (empty($col3) || preg_match('/^\d{2}\/\d{2}/', $col3) || str_contains($col3, 'ฝ่าย') || str_contains($col3, 'แผนก'))) {
-                // HIP Matrix pattern: [0: EmpCode, 1: blank, 2: FullName, 3: DeptName]
-                $fullName = $col2;
-                $deptStr = $col3;
-
-                if (str_starts_with($fullName, 'นาย')) {
-                    $prefix = 'นาย';
-                    $fullName = trim(mb_substr($fullName, 3));
-                } elseif (str_starts_with($fullName, 'นางสาว')) {
-                    $prefix = 'นางสาว';
-                    $fullName = trim(mb_substr($fullName, 6));
-                } elseif (str_starts_with($fullName, 'นาง')) {
-                    $prefix = 'นาง';
-                    $fullName = trim(mb_substr($fullName, 3));
-                }
-
-                $nameParts = preg_split('/\s+/', trim($fullName));
+            if (empty($c1) && !empty($c2)) {
+                // Pattern A (HIP Export Matrix): [0: EmpCode, 1: blank, 2: FullName, 3: DeptName]
+                [$prefix, $cleanName] = self::extractPrefixAndName($c2);
+                $nameParts = preg_split('/\s+/', trim($cleanName));
+                $firstName = $nameParts[0] ?? '';
                 if (count($nameParts) >= 2) {
-                    $firstName = $nameParts[0];
                     $lastName = implode(' ', array_slice($nameParts, 1));
-                } else {
-                    $firstName = $fullName;
                 }
+                $deptStr = $c3;
             } else {
-                // Standard Layout: [0: EmpCode, 1: Prefix, 2: FirstName, 3: LastName, 4: Dept, 5: Pos]
-                if (in_array($col1, ['นาย', 'นาง', 'นางสาว', 'Mr.', 'Mrs.', 'Ms.'])) {
-                    $prefix = $col1;
-                    $firstName = $col2;
-                    $lastName = !empty($col3) ? $col3 : '-';
-                    $deptStr = !empty($cols[4]) ? trim((string)$cols[4]) : '';
-                    $posStr = !empty($cols[5]) ? trim((string)$cols[5]) : '';
+                // Pattern B (Standard Excel Multi-Col): [0: EmpCode, 1: Prefix+Name, 2: LastName, 3: Dept]
+                [$prefix1, $cleanName1] = self::extractPrefixAndName($c1);
+
+                $firstName = $cleanName1;
+
+                if (!empty($c2)) {
+                    $isDeptKeyword = str_contains($c2, 'ฝ่าย') || str_contains($c2, 'แผนก') || str_contains($c2, 'สำนัก') || str_contains($c2, 'ส่วน') || str_contains(strtolower($c2), 'dept');
+                    if ($isDeptKeyword) {
+                        $deptStr = $c2;
+                    } else {
+                        $lastName = $c2;
+                        $deptStr = !empty($c3) ? $c3 : (!empty($c4) ? $c4 : '');
+                        $posStr = !empty($c4) && $c4 !== $deptStr ? $c4 : (!empty($c5) ? $c5 : '');
+                    }
                 } else {
-                    $firstName = !empty($col1) ? $col1 : $col0;
-                    $lastName = !empty($col2) ? $col2 : '-';
-                    $deptStr = !empty($col3) ? $col3 : '';
-                    $posStr = !empty($cols[4]) ? trim((string)$cols[4]) : '';
+                    $deptStr = !empty($c3) ? $c3 : '';
                 }
+
+                $prefix = $prefix1;
             }
 
-            // Find salary
+            // Clean trailing '-' or space in lastName
+            $lastName = trim(str_replace(['-', '–'], '', $lastName));
+            if (empty($lastName)) {
+                $lastName = '-';
+            }
+
+            $firstName = trim($firstName);
+
+            // Find salary if any col has numeric salary value
             foreach ($cols as $cVal) {
-                if (is_numeric($cVal) && (float)$cVal >= 1000 && (float)$cVal <= 500000 && (string)$cVal !== $empCode && (string)$cVal !== $col0) {
+                if (is_numeric($cVal) && (float)$cVal >= 1000 && (float)$cVal <= 500000 && (string)$cVal !== $empCode && (string)$cVal !== $c0) {
                     $salary = (float)$cVal;
                     break;
                 }
             }
 
-            if (empty($empCode) || empty($firstName) || $empCode === 'รหัสพนักงาน' || $firstName === 'ชื่อ-นามสกุล') {
+            if (empty($firstName) || $firstName === 'ชื่อ-นามสกุล' || $firstName === 'ชื่อ') {
                 continue;
             }
 

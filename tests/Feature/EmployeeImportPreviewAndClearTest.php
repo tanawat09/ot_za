@@ -7,7 +7,6 @@ use App\Models\Employee;
 use App\Models\User;
 use App\Imports\EmployeesImport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Collection;
 use Tests\TestCase;
 
 class EmployeeImportPreviewAndClearTest extends TestCase
@@ -51,34 +50,62 @@ class EmployeeImportPreviewAndClearTest extends TestCase
         $this->assertDatabaseCount('employees', 0);
     }
 
+    public function test_extract_prefix_and_name(): void
+    {
+        [$prefix1, $name1] = EmployeesImport::extractPrefixAndName('น.ส. ธิดาวรรณ');
+        $this->assertEquals('นางสาว', $prefix1);
+        $this->assertEquals('ธิดาวรรณ', $name1);
+
+        [$prefix2, $name2] = EmployeesImport::extractPrefixAndName('นาย วรภัทร');
+        $this->assertEquals('นาย', $prefix2);
+        $this->assertEquals('วรภัทร', $name2);
+    }
+
     public function test_preview_rows_parsing(): void
     {
         $rows = collect([
-            collect(['รหัสที่เครื่อง', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'แผนก']),
-            collect(['563005', '', 'ปริญวัฒน์  ปิยะอารยาภัสร์', 'ฝ่ายขนส่ง']),
+            collect(['รหัสพนักงาน', 'ชื่อ', 'นามสกุล', 'แผนก']),
+            collect(['00010', 'น.ส. ธิดาวรรณ', 'วงค์', '']),
+            collect(['00013', 'น.ส. ฐิตวรรณภรณ์', 'วงษ์มณี', '']),
+            collect(['00015', 'เทพพร', 'ธรรมวัติ -', '']),
         ]);
 
         $preview = EmployeesImport::parsePreviewRows($rows);
 
-        $this->assertCount(1, $preview);
-        $this->assertEquals('563005', $preview[0]['emp_code']);
-        $this->assertEquals('นาย', $preview[0]['prefix']);
-        $this->assertEquals('ปริญวัฒน์', $preview[0]['first_name']);
-        $this->assertEquals('ปิยะอารยาภัสร์', $preview[0]['last_name']);
-        $this->assertEquals('NEW', $preview[0]['status']);
+        $this->assertCount(3, $preview);
+
+        // Row 10 check
+        $this->assertEquals('00010', $preview[0]['emp_code']);
+        $this->assertEquals('นางสาว', $preview[0]['prefix']);
+        $this->assertEquals('ธิดาวรรณ', $preview[0]['first_name']);
+        $this->assertEquals('วงค์', $preview[0]['last_name']);
+        $this->assertEquals('แผนกทั่วไป', $preview[0]['department_name']);
+
+        // Row 13 check
+        $this->assertEquals('00013', $preview[1]['emp_code']);
+        $this->assertEquals('นางสาว', $preview[1]['prefix']);
+        $this->assertEquals('ฐิตวรรณภรณ์', $preview[1]['first_name']);
+        $this->assertEquals('วงษ์มณี', $preview[1]['last_name']);
+        $this->assertEquals('แผนกทั่วไป', $preview[1]['department_name']);
+
+        // Row 15 check (trailing - stripped)
+        $this->assertEquals('00015', $preview[2]['emp_code']);
+        $this->assertEquals('นาย', $preview[2]['prefix']);
+        $this->assertEquals('เทพพร', $preview[2]['first_name']);
+        $this->assertEquals('ธรรมวัติ', $preview[2]['last_name']);
     }
 
     public function test_execute_import_confirmation(): void
     {
         $items = [
             [
-                'emp_code' => '563005',
-                'prefix' => 'นาย',
-                'first_name' => 'ปริญวัฒน์',
-                'last_name' => 'ปิยะอารยาภัสร์',
-                'department_name' => 'ฝ่ายขนส่ง',
-                'position_title' => 'พนักงานขนส่ง',
-                'salary' => 18000.00,
+                'emp_code' => '00010',
+                'prefix' => 'นางสาว',
+                'first_name' => 'ธิดาวรรณ',
+                'last_name' => 'วงค์',
+                'department_name' => 'แผนกทั่วไป',
+                'position_title' => '-',
+                'salary' => 15000.00,
             ]
         ];
 
@@ -86,9 +113,10 @@ class EmployeeImportPreviewAndClearTest extends TestCase
 
         $this->assertEquals(1, $result['imported']);
         $this->assertDatabaseHas('employees', [
-            'emp_code' => '563005',
-            'first_name' => 'ปริญวัฒน์',
-            'last_name' => 'ปิยะอารยาภัสร์',
+            'emp_code' => '00010',
+            'prefix' => 'นางสาว',
+            'first_name' => 'ธิดาวรรณ',
+            'last_name' => 'วงค์',
         ]);
     }
 }
