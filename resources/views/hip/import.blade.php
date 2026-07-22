@@ -63,6 +63,24 @@
                 </div>
             </form>
         </div>
+
+        <!-- Danger Zone: Clear All Attendance Logs -->
+        <div class="card card-custom p-4 border border-danger shadow-sm bg-danger-subtle bg-opacity-10">
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
+                <div>
+                    <h6 class="fw-bold font-heading text-danger mb-1">
+                        <i class="bi bi-eraser-fill me-1"></i> ล้างประวัติข้อมูลสแกนนิ้ว HIP ทั้งหมด (Clear Attendance Logs)
+                    </h6>
+                    <div class="fs-7 text-muted">หลังจากคำนวณเงินเดือน/โอทีเสร็จสิ้นแล้ว สามารถกดล้างข้อมูลสแกนเก่าออกเพื่อลดภาระฐานข้อมูล</div>
+                </div>
+                <form method="POST" action="{{ route('hip.clear-all') }}" onsubmit="return confirm('⚠️ คุณต้องการลบและเคลียร์ประวัติสแกนนิ้ว HIP ทั้งหมดในระบบใช่หรือไม่?\n\n(ช่วยลดขนาดฐานข้อมูลหลังจากประมวลผลเงินเดือนเสร็จสิ้น)');" class="flex-shrink-0">
+                    @csrf
+                    <button type="submit" class="btn btn-sm btn-outline-danger font-heading fw-bold px-3">
+                        <i class="bi bi-trash-fill me-1"></i> ล้างข้อมูลสแกนทั้งหมด
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 @endsection

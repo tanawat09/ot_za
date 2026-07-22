@@ -121,6 +121,31 @@ class HipAttendanceController extends Controller
         return redirect()->route('hip.index')->with('success', $msg);
     }
 
+    /**
+     * Clear HIP Attendance Logs after calculations to keep database fast & light.
+     */
+    public function clearAll(Request $request)
+    {
+        $query = HipAttendanceLog::query();
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = $request->input('start_date');
+            $endDate = $request->input('end_date');
+            $count = $query->whereBetween('log_date', [$startDate, $endDate])->delete();
+
+            AuditLogService::log(action: 'Clear HIP Attendance Logs Range', module: 'HIP Integration', newValues: ['start_date' => $startDate, 'end_date' => $endDate, 'count' => $count]);
+
+            return redirect()->route('hip.index')->with('success', "ลบและเคลียร์ข้อมูลสแกนเวลาช่วงวันที่ {$startDate} ถึง {$endDate} เรียบร้อยแล้ว (จำนวน {$count} รายการ)");
+        }
+
+        $count = HipAttendanceLog::count();
+        HipAttendanceLog::truncate();
+
+        AuditLogService::log(action: 'Clear All HIP Attendance Logs', module: 'HIP Integration', newValues: ['count' => $count]);
+
+        return redirect()->route('hip.index')->with('success', "ลบและเคลียร์ประวัติสแกนเวลา HIP ทั้งหมดออกเรียบร้อยแล้ว (จำนวน {$count} รายการ) ฐานข้อมูลพร้อมสำหรับการนำเข้าใหม่");
+    }
+
     public function sampleTemplate()
     {
         $csvHeader = "รหัสที่เครื่อง,รหัสพนักงาน,ชื่อ-นามสกุล,แผนก,Date,1,2,3,4,\n";

@@ -74,6 +74,7 @@ Route::middleware(['auth', CheckActiveUser::class])->group(function () {
             Route::get('/', [\App\Http\Controllers\HipAttendanceController::class, 'index'])->name('index');
             Route::get('import', [\App\Http\Controllers\HipAttendanceController::class, 'create'])->name('create');
             Route::post('import', [\App\Http\Controllers\HipAttendanceController::class, 'store'])->name('store');
+            Route::post('clear-all', [\App\Http\Controllers\HipAttendanceController::class, 'clearAll'])->name('clear-all');
             Route::get('sample-template', [\App\Http\Controllers\HipAttendanceController::class, 'sampleTemplate'])->name('sample-template');
         });
 

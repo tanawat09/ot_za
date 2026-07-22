@@ -12,9 +12,17 @@
             </h5>
             <span class="text-muted fs-7">บันทึกสแกนเวลาเข้า-ออกและสถานะการจับคู่กับคำขอ OT</span>
         </div>
-        <a href="{{ route('hip.create') }}" class="btn btn-primary font-heading fw-bold shadow-sm">
-            <i class="bi bi-file-earmark-arrow-up me-1"></i> นำเข้าข้อมูล HIP สแกนนิ้ว
-        </a>
+        <div class="d-flex flex-wrap gap-2">
+            <form method="POST" action="{{ route('hip.clear-all') }}" onsubmit="return confirm('⚠️ คุณต้องการลบและเคลียร์ประวัติสแกนนิ้ว HIP ในระบบทั้งหมดใช่หรือไม่?\n\n(ช่วยลดภาระฐานข้อมูลหลังจากคำนวณเงินเดือน/OT เสร็จสิ้น)');" class="d-inline">
+                @csrf
+                <button type="submit" class="btn btn-outline-danger font-heading" title="ลบข้อมูลสแกนนิ้วทั้งหมดเพื่อลดภาระเครื่อง">
+                    <i class="bi bi-eraser-fill me-1"></i> ล้างข้อมูลสแกนเวลาทั้งหมด
+                </button>
+            </form>
+            <a href="{{ route('hip.create') }}" class="btn btn-primary font-heading fw-bold shadow-sm">
+                <i class="bi bi-file-earmark-arrow-up me-1"></i> นำเข้าข้อมูล HIP สแกนนิ้ว
+            </a>
+        </div>
     </div>
 
     <!-- Filter Form -->
@@ -44,7 +52,7 @@
     <!-- Data Table -->
     <div class="table-responsive">
         <table class="table table-hover align-middle">
-            <thead class="table-light">
+            <thead class="table-dark">
                 <tr>
                     <th>วันที่สแกน</th>
                     <th>รหัส HIP</th>
@@ -74,7 +82,7 @@
                     <tr>
                         <td colspan="8" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox display-4 d-block mb-2 text-secondary"></i>
-                            ยังไม่มีข้อมูลสแกนจาก HIP Premium Time ในระบบ
+                            ยังไม่มีข้อมูลสแกนจาก HIP Premium Time ในระบบ (หรือถูกเคลียร์ออกแล้ว)
                         </td>
                     </tr>
                 @endforelse
