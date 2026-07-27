@@ -1,58 +1,93 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ระบบบริหารจัดการการทำงานล่วงเวลา (Enterprise Overtime Management System - OT ZA)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+ระบบบริหารจัดการการทำงานล่วงเวลา (Overtime Management System) ครบวงจร พัฒนาด้วย **Laravel 13** และ **MariaDB 10.11** รองรับการนำเข้าข้อมูลพนักงาน, เชื่อมโยงเวลาสแกนจากเครื่องสแกนลายนิ้วมือ **HIP Premium Time**, ระบบอนุมัติคำขอ OT แบบหลายระดับ, การออกเอกสารใบยินยอม (Consent PDF) และการคำนวณค่าตอบแทน OT พร้อมส่งออกไฟล์ Payroll
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🔑 บัญชีผู้ใช้งานระบบและรหัสผ่าน (System Login Credentials)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+URL สำหรับเข้าใช้งานระบบ: **[http://localhost:8082](http://localhost:8082)**
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+> 📌 **รหัสผ่านตั้งต้นของทุกบัญชี (Default Password):** `Password123!`
 
-## Learning Laravel
+| บทบาท (Role) | อีเมล (Email) | รหัสพนักงาน (Emp Code) | สิทธิ์การใช้งาน (Permissions) |
+| :--- | :--- | :--- | :--- |
+| **Super Admin** | `admin@company.com` | `EMP-0001` | สิทธิ์สูงสุดในระบบ เข้าถึงได้ทุกเมนู รวมถึงการจัดการผู้ใช้และ Audit Logs |
+| **HR Admin** | `hr@company.com` | `EMP-0002` | จัดการข้อมูลพนักงาน, นำเข้าไฟล์ HIP, ตรวจสอบและส่งออก Payroll, ล็อกงวดประจำเดือน |
+| **Manager** | `manager@company.com` | `EMP-0003` | อนุมัติ/ไม่อนุมัติ คำขอ OT ของพนักงานในแผนก, ดูรายงานสรุประดับแผนก |
+| **Supervisor** | `supervisor@company.com` | `EMP-0004` | สร้างคำขอ OT ให้พนักงานในทีม, บันทึกเวลาปฏิบัติงานจริง (Actual Time) |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🗄️ ข้อมูลการเชื่อมต่อฐานข้อมูล (Database Connection Credentials)
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+ระบบใช้ **MariaDB 10.11** ทำงานบน Docker Container (`ot_mariadb`)
 
-## Agentic Development
+### 1. เชื่อมต่อจากภายนอก (External Access via GUI Clients e.g. DBeaver, TablePlus, Navicat)
+* **Host:** `127.0.0.1` (หรือ `localhost`)
+* **Port:** `3307`
+* **Database Name:** `ot_db`
+* **User Application:** `ot_user` | **Password:** `ot_password`
+* **Root Admin:** `root` | **Password:** `root_password`
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+### 2. เชื่อมต่อภายในคอนเทนเนอร์ (Internal Docker Network)
+* **Host:** `db`
+* **Port:** `3306`
+* **Database Name:** `ot_db`
 
+---
+
+## 🚀 คุณสมบัติเด่นของระบบ (Key System Features)
+
+### 1. ระบบนำเข้าพนักงาน (Employee Import & Verification)
+* รองรับไฟล์ Excel รายชื่อพนักงานทุกรูปแบบ (รวมถึงไฟล์ `employees_emp.xlsx`)
+* ระบบ **2-Step Preview Mode**: แสดงตารางพรีวิวและตรวจสอบความถูกต้อง (รหัส, ชื่อ-นามสกุล, แผนก, ตำแหน่ง, เงินเดือน) ก่อนกดยืนยันบันทึกจริง
+* ระบบตรวจจับคำนำหน้าไทย/อังกฤษอัตโนมัติ (`นาย`, `นางสาว`, `น.ส.`, `MR.`, `MS.` ฯลฯ)
+* ปุ่ม **"ล้างข้อมูลพนักงานทั้งหมด"** สำหรับล้างข้อมูลเก่าที่ผิดพลาดออกอย่างปลอดภัย
+
+### 2. ระบบเชื่อมโยง HIP Premium Time Integration
+* รองรับไฟล์สแกนนิ้ว/ใบหน้าจากโปรแกรม **HIP Premium Time (v2.0, v6)** ทั้งรูปแบบ Excel (`.xlsx`, `.xls`), CSV (`.csv`), Text (`.txt`) และฐานข้อมูล MS Access (`.mdb`)
+* ระบบจับคู่เวลาสแกนเข้า-ออกกับคำขอ OT ที่ได้รับอนุมัติแล้วให้อัตโนมัติ
+* ปุ่ม **"ล้างข้อมูลสแกนเวลาทั้งหมด"** สำหรับเคลียร์ประวัติสแกนดิบหลังจากคำนวณเงินเดือนเสร็จสิ้น เพื่อลดภาระและประหยัดพื้นที่ฐานข้อมูล
+
+### 3. ระบบคำร้องและการอนุมัติทำงานล่วงเวลา (Overtime Workflow)
+* การอนุมัติแบบหลายขั้นตอน (Supervisor ยื่นคำขอ -> Manager พิจารณาอนุมัติ/ไม่อนุมัติ/ส่งกลับแก้ไข)
+* ออกเอกสารใบยินยอมทำงานล่วงเวลา **Consent Form (PDF)** พร้อม QR Code และ Barcode อ้างอิงเอกสาร
+* บันทึกเวลาปฏิบัติงานจริง (Actual Time) และการล็อกงวดจ่ายเงินประจำเดือน (Monthly Period Lock)
+
+### 4. การคำนวณและส่งออกรายงาน (Payroll Calculation & Reports)
+* คำนวณอัตรา OT ตามประเภท (1.0, 1.5, 2.0, 3.0 เท่า) รองรับทั้งพนักงานรายเดือน (Monthly) และรายวัน (Daily)
+* ส่งออกไฟล์รายงานค่าตอบแทน OT สำหรับฝ่ายบัญชี/เงินเดือนในรูปแบบ Excel และ PDF
+
+---
+
+## 🛠️ การติดตั้งและการรันระบบ (Setup & Commands Guide)
+
+### 1. การรันระบบด้วย Docker
 ```bash
-composer require laravel/boost --dev
+# สั่งงาน Docker Container
+docker compose up -d
 
-php artisan boost:install
+# ตรวจสอบสถานะการทำงานของคอนเทนเนอร์
+docker compose ps
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### 2. คำสั่ง Artisan ที่ใช้อยู่เสมอ
+```bash
+# รันการทดสอบระบบทั้งหมด (Automated Tests)
+docker exec ot_app php artisan test
 
-## Contributing
+# รัน Migration ฐานข้อมูล
+docker exec ot_app php artisan migrate
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+# รัน Seeder สร้างข้อมูลเริ่มต้น
+docker exec ot_app php artisan db:seed
+```
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## 📄 ลิขสิทธิ์และการพัฒนา (License & Credits)
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+* **พัฒนาโดย:** Advanced Agentic Coding Team
+* **Framework:** Laravel 13.x (PHP 8.4)
+* **Database:** MariaDB 10.11
