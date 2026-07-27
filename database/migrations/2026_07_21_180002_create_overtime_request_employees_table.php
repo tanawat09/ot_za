@@ -26,7 +26,7 @@ return new class extends Migration
             $table->foreignId('actual_recorded_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            $table->unique(['overtime_request_id', 'employee_id']);
+            $table->unique(['overtime_request_id', 'employee_id'], 'ot_req_emp_unique');
         });
     }
 
